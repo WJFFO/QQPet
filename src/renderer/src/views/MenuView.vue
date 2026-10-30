@@ -18,7 +18,7 @@
           <div
             v-else
             class="item"
-            :class="{ on: isChecked(it) }"
+            :class="{ on: isChecked(it), alert: it.alert }"
             @click="onClick(it)"
           >
             <img v-if="iconMap[it.icon]" class="ico" :src="iconMap[it.icon]" alt="" draggable="false" />
@@ -33,17 +33,23 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { asset } from '../ui/useSkin'
+import { SICK_AT } from '../composables/stats'
 
 // 原版 QQ 宠物右键菜单：浅蓝玻璃圆角面板 + 蓝色渐变标题条 + 分组菜单项，
 // 悬停为蓝色高亮（色值取自 Menu/ditu04.bmp）；左侧功能图标取自 control/icons。
 // 标题显示当前昵称与等级（档案页改名后重开菜单即同步）。
 const nick = ref(localStorage.getItem('qqpet.name') || 'QQ宠物')
 const lvl = ref(Number(localStorage.getItem('qqpet.level')) || 1)
+// 生病时把「喂药」顶到最前面并标出来，免得像以前那样只能翻背包找药
+const health = ref(Number(localStorage.getItem('qqpet.health') ?? 100))
+const sick = computed(() => health.value <= SICK_AT)
 
-const items = [
+const items = computed(() => [
+  ...(sick.value ? [{ action: 'cure', label: '喂药（生病了）', icon: 'zhibing', alert: true }] : []),
   { action: 'eat', label: '喂食', icon: 'weishi' },
+  { action: 'cure', label: '喂药', icon: 'zhibing', hideWhenSick: true },
   { action: 'clean', label: '洗澡', icon: 'qingjie' },
   { action: 'play', label: '玩耍', icon: 'wanshua' },
   { action: 'work', label: '打工', icon: 'dagong' },
@@ -65,11 +71,13 @@ const items = [
   { action: 'hide', label: '隐藏宠物' },
   { action: 'exit', label: '退出' }
 ]
+  // 生病时上面已有醒目的「喂药（生病了）」，这条普通的就不重复了
+  .filter((it) => !(it.hideWhenSick && sick.value)))
 
 // 图标异步加载（dataURL），失败则退化回圆点
 const iconMap = reactive({})
 onMounted(async () => {
-  const keys = [...new Set(items.filter((it) => it.icon).map((it) => it.icon))]
+  const keys = [...new Set(items.value.filter((it) => it.icon).map((it) => it.icon))]
   await Promise.all(
     keys.map(async (k) => {
       iconMap[k] = await asset(`assets/control/icons/${k}.png`)
@@ -196,6 +204,8 @@ body,
   min-height: 0;
   padding: 4px 3px;
   box-sizing: border-box;
+  /* 万一再加菜单项，宁可滚动也不要裁掉最后几行 */
+  overflow-y: auto;
 }
 .item {
   position: relative;
@@ -215,6 +225,17 @@ body,
 }
 .item:active {
   background: linear-gradient(180deg, #a8d5f2 0%, #86bfe6 100%);
+}
+/* 生病时的「喂药」：红底加粗，一眼能看到 */
+.item.alert {
+  color: #b3271e;
+  font-weight: bold;
+  background: linear-gradient(180deg, #ffe9e6 0%, #ffd9d3 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+.item.alert:hover {
+  background: linear-gradient(180deg, #ffd9d3 0%, #ffbfb4 100%);
+  color: #8f1a13;
 }
 .dot {
   width: 3px;

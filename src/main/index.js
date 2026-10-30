@@ -545,6 +545,7 @@ function createMenuWindow() {
   if (menuWindow && !menuWindow.isDestroyed()) { menuWindow.focus(); return }
 
   const W = 156
+  // 菜单项加了「喂药」后共 19 项（约 477px），500 刚好容下，留一点余量
   const H = 500
   const pos = screen.getCursorScreenPoint()
   const dis = screen.getDisplayNearestPoint(pos).workArea

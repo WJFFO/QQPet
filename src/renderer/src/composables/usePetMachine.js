@@ -1263,6 +1263,11 @@ function createPetMachine() {
       : (action && typeof action === 'object' && (action.type === 'eat' || action.type === 'clean' || action.type === 'cure')) ? action.type
       : null
     if (consumeEffect) {
+      // 健康满的时候别浪费药：菜单里的「喂药」是常驻项，随手点一下不该扣道具
+      if (consumeEffect === 'cure' && health.value >= STAT_MAX.health) {
+        sayUntil('我现在健健康康的，不用吃药～', 2600)
+        return
+      }
       const item = consumeItem(consumeEffect)
       if (!item) {
         sayUntil(
