@@ -261,6 +261,9 @@ async function refreshMemory() {
 async function send(text) {
   const content = String(text ?? draft.value).trim()
   if (!content || thinking.value) return
+  // 每轮发送前重读一次配置：广播万一没到（窗口刚创建、监听还没注册好），
+  // 也不会抱着旧人设聊下去——「改了人设还是老样子」多半就是这种时序问题。
+  cfg.value = readCfg()
   if (!configured.value) {
     status.value = '还没配置 API Key'
     return
