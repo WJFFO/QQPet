@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>hero</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        width: 1000px;
+        height: 400px;
+        font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        background:
+          radial-gradient(900px 420px at 6% 10%, #dbeafe 0%, rgba(219, 234, 254, 0) 58%),
+          radial-gradient(760px 400px at 98% 92%, #ede9fe 0%, rgba(237, 233, 254, 0) 62%),
+          linear-gradient(135deg, #f5f9ff 0%, #eef3fb 55%, #f8f5ff 100%);
+        display: flex;
+        align-items: center;
+        padding: 0 58px;
+        overflow: hidden;
+        position: relative;
+      }
+      body::after {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 66px;
+        background: linear-gradient(180deg, rgba(178, 197, 228, 0) 0%, rgba(178, 197, 228, 0.2) 100%);
+      }
+      .stage {
+        position: relative;
+        width: 288px;
+        height: 330px;
+        flex: none;
+      }
+      .pet-card {
+        position: absolute;
+        inset: 0;
+        border-radius: 28px;
+        background: #ffffff;
+        box-shadow: 0 20px 44px -14px rgba(70, 100, 160, 0.3), 0 2px 6px rgba(70, 100, 160, 0.07);
+      }
+      /* 宠物原图四周留白较多，放大后溢出卡片，视觉更饱满 */
+      .stage img {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        transform: translate(-50%, -50%);
+        width: 300px;
+        height: 336px;
+        object-fit: contain;
+      }
+      .bubble {
+        position: absolute;
+        left: 300px;
+        top: 4px;
+        background: #fff;
+        border-radius: 14px;
+        padding: 10px 16px;
+        font-size: 14px;
+        color: #3f5b86;
+        white-space: nowrap;
+        box-shadow: 0 10px 24px -10px rgba(70, 100, 160, 0.4);
+        border: 1px solid #e3ecf9;
+        z-index: 3;
+      }
+      .bubble::after {
+        content: "";
+        position: absolute;
+        left: -6px; bottom: 16px;
+        width: 11px; height: 11px;
+        background: #fff;
+        border-left: 1px solid #e3ecf9;
+        border-bottom: 1px solid #e3ecf9;
+        transform: rotate(45deg);
+      }
+      .right { margin-left: 60px; position: relative; z-index: 2; padding-bottom: 4px; }
+      .title {
+        font-size: 46px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #1f3a63;
+        line-height: 1.1;
+      }
+      .title span { color: #2f7bef; }
+      .sub {
+        margin-top: 18px;
+        font-size: 16px;
+        color: #5a7599;
+        line-height: 1.75;
+      }
+      .tags { margin-top: 26px; display: flex; gap: 10px; }
+      .tag {
+        font-size: 13px;
+        color: #2f5e9e;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #d8e4f6;
+        border-radius: 999px;
+        padding: 7px 15px;
+        box-shadow: 0 4px 12px -6px rgba(70, 100, 160, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="pet-card"></div>
+      <img src="screenshots/pet.png" alt="pet" />
+      <div class="bubble">主人，今天也要一起加油哦～</div>
+    </div>
+    <div class="right">
+      <div class="title">QQ宠物 <span>桌面版</span></div>
+      <div class="sub">
+        经典桌面宠物复刻 · 领养、喂食、洗澡、打工、上课、逛商店<br />
+        由大模型驱动对话与行为，安静陪在桌面一角
+      </div>
+      <div class="tags">
+        <div class="tag">Electron</div>
+        <div class="tag">Vue 3</div>
+        <div class="tag">Flash / Ruffle</div>
+        <div class="tag">AI 对话</div>
+      </div>
+    </div>
+  </body>
+</html>
