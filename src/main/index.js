@@ -369,9 +369,13 @@ ipcMain.on('alert-result', (_e, res) => {
   centerWindow?.webContents.send('alert-result', res)
 })
 // 元宝/背包数据变更：广播给所有数据展示窗口，替代跨窗口轮询
+// 注意：必须包含 auxWindows（聊天窗在里面）——聊天窗靠这个事件重读 AI 配置，
+// 漏掉它的话，设置页改完人设/接口地址，聊天窗还是拿旧配置，要重开窗口才生效。
 ipcMain.on('storage-changed', () => {
-  const wins = [mainWindow, centerWindow].filter(Boolean)
-  for (const w of wins) w.webContents.send('storage-changed')
+  const wins = [mainWindow, centerWindow, ...auxWindows.values()].filter(Boolean)
+  for (const w of wins) {
+    if (!w.isDestroyed()) w.webContents.send('storage-changed')
+  }
 })
 
 // 首次领养选择窗口（选性别 + 命名）
