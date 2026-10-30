@@ -375,7 +375,7 @@ ipcMain.handle('mem-append', (_e, rec) => {
   if (String(rec?.src || '') === 'auto') broadcastChatUpdated()
   return r
 })
-ipcMain.handle('mem-context', (_e, limit) => memory.context(limit))
+ipcMain.handle('mem-context', (_e, limit, since) => memory.context(limit, since))
 ipcMain.handle('mem-history', (_e, opts) => memory.history(opts || {}))
 ipcMain.handle('mem-clear', (_e, scope) => memory.clear(scope))
 ipcMain.handle('mem-profile', () => memory.readProfile())

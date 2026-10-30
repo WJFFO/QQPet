@@ -993,7 +993,9 @@ function createPetMachine() {
     autoTalking = true
     try {
       // 带上 L1 摘要 + L2 档案 + 少量最近原文，否则主动开口每次都像第一次见面
-      const ctx = await window.api.memContext?.(8)
+      // 换过人设之前的历史不要：主动搭话最容易照着旧语气（本座/结界）继续演
+      const revAt = Number(localStorage.getItem('qqpet.ai.personaRevAt')) || 0
+      const ctx = await window.api.memContext?.(8, revAt)
       const memParts = []
       if (ctx?.impression) memParts.push(`更早以前：${ctx.impression}`)
       if (ctx?.summary) memParts.push(`最近聊过：\n${ctx.summary}`)

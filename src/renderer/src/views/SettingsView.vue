@@ -260,7 +260,13 @@ const aiSaving = ref(false)
 // 所有保存路径（人设切换 / 人设浮层 / 保存按钮 / 底部应用）统一走这里，保证有据可查。
 function persistAi() {
   try {
+    const before = readAiConfig().persona
     saveAiConfig(ai.value)
+    // 人设换了就记下时间点：之后拼上下文时，这个时间之前的对话不再喂给模型，
+    // 否则里面全是旧语气的示范，模型会照着「本座」继续演。
+    if (before !== String(ai.value.persona || '')) {
+      localStorage.setItem('qqpet.ai.personaRevAt', String(Date.now()))
+    }
     const back = readAiConfig()
     const same =
       back.model === String(ai.value.model).trim() &&

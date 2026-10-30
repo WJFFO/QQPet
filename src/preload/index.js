@@ -86,7 +86,7 @@ const api = {
   // 追加一条：{ role:'user'|'pet', text, src:'chat'|'auto', emotion?, action? }
   memAppend: (rec) => ipcRenderer.invoke('mem-append', rec),
   // 组装上下文：{ history:[{role,content}], summary, impression, facts, factCount }
-  memContext: (limit) => ipcRenderer.invoke('mem-context', limit),
+  memContext: (limit, since) => ipcRenderer.invoke('mem-context', limit, since),
   // 按天分组的历史（聊天窗回填）
   memHistory: (opts) => ipcRenderer.invoke('mem-history', opts),
   // 清空：'today' 只清今天的聊天，'all' 连长期记忆一起清

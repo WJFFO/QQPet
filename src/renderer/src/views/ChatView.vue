@@ -117,6 +117,8 @@ const status = ref('')
 const TOKEN_KEY = 'qqpet.ai.tokens'
 // 上一次真正发出去的人设文本：变了说明主人刚换过性格，这一轮要特别强调
 const PERSONA_SEEN_KEY = 'qqpet.personaSeen'
+// 换人设的时间点：这个时间之前的对话不再带进上下文
+const PERSONA_REV_KEY = 'qqpet.ai.personaRevAt'
 const tokenTotal = ref(Number(localStorage.getItem(TOKEN_KEY)) || 0)
 let tokenInfo = ''
 let statusTimer = null
@@ -288,11 +290,13 @@ async function send(text) {
   const personaChanged = !!personaBefore && personaBefore !== personaNow
   if (personaBefore !== personaNow) localStorage.setItem(PERSONA_SEEN_KEY, personaNow)
 
-  // 平时带最近 12 条控制 token；刚换人设只留 2 条，避免旧语气被当成范例
-  const keep = personaChanged ? 2 : 12
+  // 换过人设的时间点之前的对话一律不带：那里面全是旧语气的现成示范，
+  // 只截短到几条也没用（最近几条同样是被带偏的），直接从源头掐掉。
+  const revAt = Number(localStorage.getItem(PERSONA_REV_KEY)) || 0
   const history = messages.value
     .filter((m) => !m.fail)
-    .slice(-keep)
+    .filter((m) => !revAt || Number(m.time) >= revAt)
+    .slice(-12)
     .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }))
 
   const res = await window.api.aiChat({

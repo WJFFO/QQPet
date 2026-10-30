@@ -226,10 +226,14 @@ function writeSummary(s) {
  * 给渲染层拼 prompt 用：L0 原文 + L1 摘要 + L2 事实。
  * 事实按最近提及倒序取前 12 条，避免老早的东西一直占 token。
  */
-export function context(limit = LIMITS.ctxMsgs) {
+export function context(limit = LIMITS.ctxMsgs, since = 0) {
   // limit=0 表示只要 L1/L2（聊天窗已经用 mem-history 拿到原文，不必重复读）
+  // since>0 时只取该时间点之后的消息：换过宠物人设后，旧语气不能再喂给模型
   const n = Number(limit)
-  const recent = n === 0 ? [] : readRecent(Math.max(1, n || LIMITS.ctxMsgs), 3)
+  const sinceTs = Number(since) || 0
+  // 先多取一些再按时间过滤，避免过滤完不够条数
+  const raw = n === 0 ? [] : readRecent(Math.max(1, n || LIMITS.ctxMsgs) * (sinceTs ? 12 : 1), 3)
+  const recent = sinceTs ? raw.filter((m) => Number(m.t) >= sinceTs).slice(-Math.max(1, n || LIMITS.ctxMsgs)) : raw
   const p = readProfile()
   const s = readSummary()
   const topFacts = [...p.facts].sort((a, b) => b.at - a.at).slice(0, 12)
@@ -237,7 +241,8 @@ export function context(limit = LIMITS.ctxMsgs) {
   return {
     history: recent.map((m) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
-      content: String(m.text || '')
+      content: String(m.text || ''),
+      t: Number(m.t) || 0
     })),
     summary: s.items.map((x) => `- ${x}`).join('\n'),
     impression: s.impression,
