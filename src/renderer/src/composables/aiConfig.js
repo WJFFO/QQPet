@@ -140,3 +140,60 @@ export function normalizeSelfRef(text) {
 /** 通用的自称规则，所有性格都适用 */
 export const SELF_REF_RULE =
   '称呼规则：不管什么性格，说自己的时候一律用「我」，称呼主人用「你」。禁止使用本座、本尊、吾、吾辈、老夫、朕这类自称；历史消息里如果出现过，那是过去的错，不要跟着学。'
+
+/**
+ * 最近发生的照顾动作（喂食 / 洗澡 / 治病 / 玩耍）。
+ *
+ * 这些动作发生在宠物窗口，聊天窗只能读到 localStorage 里的数值——
+ * 「饱食 100」模型是看得到的，但它不知道「这是主人刚喂的」，
+ * 而历史里上一句往往还留着「我好饿」，于是喂完照样喊饿。
+ * 所以把动作本身也记下来，随系统提示词一起交给模型。
+ */
+const ACT_KEY = 'qqpet.ai.acts'
+const ACT_MAX = 8
+const ACT_FRESH_MS = 30 * 60 * 1000 // 只把半小时内发生的算「刚才」
+
+const ACT_TEXT = {
+  eat: (d) => `主人刚喂我吃了${d}，我已经吃饱了`,
+  clean: (d) => `主人刚用${d}给我洗了澡，身上干净了`,
+  cure: (d) => `主人刚给我吃了${d}，病已经好了`,
+  play: () => '主人刚陪我玩了一会儿',
+  work: () => '我刚打完一份工',
+  study: () => '我刚下课',
+  sleep: () => '我刚睡了一觉'
+}
+
+/** 记一条照顾动作。kind 见 ACT_TEXT，detail 一般是物品名。 */
+export function recordAct(kind, detail) {
+  if (!ACT_TEXT[kind]) return
+  let list = []
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACT_KEY) || '[]')
+    if (Array.isArray(raw)) list = raw
+  } catch {
+    list = []
+  }
+  list.push({ kind, detail: String(detail || ''), at: Date.now() })
+  try {
+    localStorage.setItem(ACT_KEY, JSON.stringify(list.slice(-ACT_MAX)))
+  } catch {
+    /* 配额满时忽略：动作记录只是锦上添花，不能影响主流程 */
+  }
+}
+
+/** 把最近的动作拼成人话，给系统提示词用。maxAge 可覆盖默认的半小时窗口。 */
+export function recentActsText(maxAge = ACT_FRESH_MS) {
+  let list = []
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACT_KEY) || '[]')
+    if (Array.isArray(raw)) list = raw
+  } catch {
+    return ''
+  }
+  const now = Date.now()
+  const rows = list
+    .filter((a) => a && ACT_TEXT[a.kind] && now - Number(a.at || 0) <= maxAge)
+    .map((a) => ACT_TEXT[a.kind](a.detail || '东西'))
+  // 同一件事重复做只提一次，免得模型以为主人喂了八顿
+  return [...new Set(rows)].slice(-4).join('\n')
+}

@@ -75,7 +75,14 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import QFrame from '../ui/QFrame.vue'
-import { readAiConfig, personaText, normalizeSelfRef, SELF_REF_RULE } from '../composables/aiConfig'
+import {
+  readAiConfig,
+  personaText,
+  normalizeSelfRef,
+  SELF_REF_RULE,
+  recentActsText
+} from '../composables/aiConfig'
+import { hungerBand, cleanBand, moodBand, SICK_AT, MAX as STAT_MAX } from '../composables/stats'
 
 // 动作名 → 中文，仅用于气泡下方的小标签
 const ACTION_LABEL = {
@@ -203,10 +210,12 @@ function petState() {
     name: localStorage.getItem('qqpet.name') || '宝贝',
     owner: localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人',
     level: n('qqpet.level', 1),
-    hunger: n('qqpet.hunger', 100),
-    clean: n('qqpet.clean', 100),
-    health: n('qqpet.health', 100),
-    mood: n('qqpet.moodval', 1000),
+    // 默认值取各项上限：以前写死 100，而饱食上限其实是 1080，
+    // 没初始化时会被当成「只吃了十分之一」，模型就一路喊饿
+    hunger: n('qqpet.hunger', STAT_MAX.hunger),
+    clean: n('qqpet.clean', STAT_MAX.clean),
+    health: n('qqpet.health', STAT_MAX.health),
+    mood: n('qqpet.moodval', STAT_MAX.mood),
     coins: n('qqpet.coins', 0)
   }
 }
@@ -214,6 +223,11 @@ function petState() {
 function systemPrompt(personaChanged = false) {
   const s = petState()
   const persona = personaText(cfg.value.persona)
+  // 状态用档位而不是数字：给了数字模型会照着念出来，而且「饱食 100」这种
+  // 绝对值它不一定能理解成「刚吃饱」
+  const healthText = s.health >= 80 ? '很健康' : s.health > SICK_AT ? '有点不舒服' : '生病了'
+  // 主人刚喂过/治过病：光靠上面的状态值不够，模型会顺着历史里那句「我好饿」继续演
+  const actsText = recentActsText()
   return [
     // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
     `【人设·最高优先级】${persona}`,
@@ -225,7 +239,11 @@ function systemPrompt(personaChanged = false) {
     personaChanged
       ? '【刚换过性格】主人刚刚给你换了新性格，历史消息里的说话方式全部作废，从这一句起严格按新人设开口。'
       : '',
-    `当前状态：等级 ${s.level}，饱食 ${s.hunger}/100，清洁 ${s.clean}/100，健康 ${s.health}/100，心情 ${s.mood}/1000，元宝 ${s.coins}。`,
+    `当前状态（此刻）：饱食「${hungerBand(s.hunger).label}」，清洁「${cleanBand(s.clean).label}」，健康「${healthText}」，心情「${moodBand(s.mood).label}」，等级 ${s.level}。`,
+    actsText
+      ? `【刚才发生的事】\n${actsText}\n这些是真实发生过的，状态已经跟着变了。不要再说没吃的、还饿着、生病或者没人管你——那是历史里的事，已经解决了。`
+      : '',
+    '上面这一段永远比历史消息新：历史里说过「好饿」「生病了」，只要现在状态好了，就不要再提。',
     '保持这个人设说话，不要因为一轮对话就跳出角色。状态不好（饿/脏/病/心情低）时要自然地在台词里流露出来。',
     '回复要求：像宠物说话，口语短句，20~50 字以内，不要用 Markdown、不要列表、不要括号动作描写。',
     '格式要求：只输出那一个 JSON 对象本身，不要代码块、不要解释、不要在前后加任何字符；reply 必须是单行，不能有换行。',
@@ -417,10 +435,18 @@ async function onChatUpdated() {
 
 onMounted(async () => {
   off = window.api.onStorageChanged?.(() => {
-    cfg.value = readCfg()
-    // 设置页改完人设/模型后给个可见反馈，不用再猜「到底生效没有」
+    // 这个广播现在也覆盖喂食/洗澡/治病（动作要同步给 AI），所以得先分清是
+    // 「配置变了」还是「状态变了」——后者不能弹「配置已更新，下一句就用新人设」
+    const before = cfg.value
+    const next = readCfg()
+    const cfgChanged =
+      before.apiKey !== next.apiKey ||
+      before.model !== next.model ||
+      before.baseUrl !== next.baseUrl ||
+      before.persona !== next.persona
+    cfg.value = next
     tokenInfo = `${modelLabel.value} · 累计 ${fmtTokens(tokenTotal.value)} tokens`
-    showStatus('配置已更新，下一句就用新人设', 2200)
+    if (cfgChanged) showStatus('配置已更新，下一句就用新人设', 2200)
   })
   offChat = window.api.onChatUpdated?.(onChatUpdated)
   window.addEventListener('beforeunload', () => {

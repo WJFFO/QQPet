@@ -9,7 +9,15 @@ import {
   ONLINE_TIERS
 } from './dailyTasks'
 import { emptyAcc, stepDecay } from './petDecay'
-import { readAiConfig, personaText, autoTalkGapMs, normalizeSelfRef, SELF_REF_RULE } from './aiConfig'
+import {
+  readAiConfig,
+  personaText,
+  autoTalkGapMs,
+  normalizeSelfRef,
+  SELF_REF_RULE,
+  recordAct,
+  recentActsText
+} from './aiConfig'
 import { levelFromTotal, levelBaseExp, expToNext, onlineGrowRate, MAX_LEVEL } from './levels'
 import {
   MAX as STAT_MAX,
@@ -1001,6 +1009,8 @@ function createPetMachine() {
       if (ctx?.summary) memParts.push(`最近聊过：\n${ctx.summary}`)
       if (ctx?.facts) memParts.push(`你记着的事：\n${ctx.facts}`)
       const memText = memParts.join('\n')
+      // 刚喂过/刚治过病：让开口时知道，否则它会照着历史里的「我好饿」继续说
+      const actsText = recentActsText()
 
       const res = await window.api.aiChat({
         apiKey: cfg.apiKey,
@@ -1015,6 +1025,9 @@ function createPetMachine() {
               `你是桌面宠物「${petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。说话要贴合上面的人设。`,
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。记忆只提供事实，语气按人设来。` : '',
               SELF_REF_RULE,
+              actsText
+                ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了。别再喊饿、喊脏、说生病或者抱怨没人管你，那些事已经被解决。`
+                : '',
               '主人这会儿没在跟你说话，你要主动开口，说话要符合上面的性格。',
               '不要模仿历史对话里的口头禅和句式，语气一律以人设为准。',
               '只输出一个 JSON：{"reply":"一句话","emotion":"情绪"}，不要 action 字段，不要代码块和任何解释。',
@@ -1281,7 +1294,11 @@ function createPetMachine() {
       if (consumeEffect === 'eat') { hunger.value = Math.min(STAT_MAX.hunger, hunger.value + v); addMood(MOOD_GAIN.feed); addGrowth(8); addDailyProgress('feed') }
       else if (consumeEffect === 'clean') { clean.value = Math.min(STAT_MAX.clean, clean.value + v); addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
       else if (consumeEffect === 'cure') { health.value = Math.min(STAT_MAX.health, health.value + v); addGrowth(6) }
+      // 记一笔给 AI：数值变了模型能读到，但它不知道「是主人刚做的」，
+      // 于是喂完照样喊饿。动作本身也要进上下文。
+      recordAct(consumeEffect, item.name)
       persistLevel()
+      window.api?.storageChanged?.() // 广播：聊天窗/中心窗立即拿到新状态
       sayUntil(`使用了${item.name}，${consumeEffect === 'eat' ? '饱食' : consumeEffect === 'clean' ? '清洁' : '健康'} +${v}！`, 2600)
       return
     }
