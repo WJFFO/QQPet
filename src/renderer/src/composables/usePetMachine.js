@@ -80,7 +80,7 @@ async function randomBubble(category) {
 
 function createPetMachine() {
   // 【临时】测试用：每次启动清空进度，方便重复体验升级/进化。测完删除本行。
-   // localStorage.clear()
+  // localStorage.clear()
 
   // 成长值是原版决定等级的唯一因素，等级由累计成长值查表得出（原版没有「经验」这个指标）。
   const TOTAL_KEY = 'qqpet.totalExp'
@@ -524,27 +524,22 @@ function createPetMachine() {
   }
 
   // —— 打工系统 ——
-  // 打工为「按时长结算」的实时会话：打工中对饥饿/清洁额外消耗（每分钟各 -2），兑换为元宝。
-  // 岗位由打工页选择（不同岗位 元宝/经验 单价不同），时长支持 15 分钟 / 1 小时 / 4 小时。
+  // 打工为「按时长结算」的实时会话：打工中饥饿/清洁消耗更快（原版 -4/-3 每分钟），兑换为元宝。
+  // 原版打工的产出只有元宝（成长值只由在线时长决定，打工期间照常 +1/小时），不额外发成长值。
   const WORK_RATE = 10 // 默认 元宝/分钟
-  // 打工额外成长（每分钟）。原版成长值只由在线时长决定，打工期间本来就在线，
-  // 所以这里只是很小的加成，不能盖过在线成长（原来 50/分钟 = 3000/小时，会几分钟连升好几级）。
-  const WORK_EXP_RATE = 3
   const WORK_HINT_INTERVAL = 5 // 打工气泡提示间隔（分钟）
   const WORK_MIN_LEVEL = 5 // 打工等级门槛：5 级（幼年期）起
   const working = ref(false)
   const studying = ref(false)
   const workLeftSec = ref(0)
   let workRate = WORK_RATE
-  let workExpRate = WORK_EXP_RATE
   let workStartAt = 0
   let workEndsAt = 0
   let workMinute = 0
   let workAccum = 0
-  let workExpAccum = 0
   let workHintAt = 0
   let workOneMinHinted = false
-  let studyRewardExp = 30 // 本次课程结算的经验（学习页选课决定）
+  let studyScholarship = 0 // 本次课程完成后的奖学金（元宝，原版：小学20/中学50/大学100）
 
   // —— 托盘状态推送 ——
   // 组装当前状态（key + 文案）：死亡 > 打工(含剩余时间) > 学习 > 生病 > 休息 > 成长 。
@@ -574,19 +569,17 @@ function createPetMachine() {
     }
   }
 
-  // 开始打工：job = { id, name, rate, exp }（由打工页选择），minutes 为时长
+  // 开始打工：job = { id, name, rate }（由打工页选择），minutes 为时长
   function playWork(minutes = 60, job = null) {
     if (sick.value) { play('speak', { keepSwf: true, user: true }); return }
     if (level.value < WORK_MIN_LEVEL) { sayUntil(`要 ${WORK_MIN_LEVEL} 级以后才能打工哦～`, 2500); return }
     if (working.value) { sayUntil('已经在打工啦～', 2000); return }
     workRate = Number(job?.rate) || WORK_RATE
-    workExpRate = Number(job?.exp) || WORK_EXP_RATE
     working.value = true
     workStartAt = Date.now()
     workEndsAt = Date.now() + minutes * 60000
     workMinute = 0
     workAccum = 0
-    workExpAccum = 0
     workHintAt = WORK_HINT_INTERVAL
     workOneMinHinted = false
     workLeftSec.value = minutes * 60
@@ -597,7 +590,6 @@ function createPetMachine() {
         id: job?.id || 'default',
         name: job?.name || '打工',
         rate: workRate,
-        exp: workExpRate,
         minutes,
         startAt: workStartAt,
         endsAt: workEndsAt
@@ -605,7 +597,7 @@ function createPetMachine() {
     )
     window.api?.storageChanged?.()
     // 开始打工只弹气泡提示，不切换动画；打工期间自动状态循环照常进行
-    sayUntil(`开始${job?.name || '打工'}，${minutes} 分钟后领取 ${minutes * workRate} 元宝、${minutes * workExpRate} 成长值～`, 2600)
+    sayUntil(`开始${job?.name || '打工'}，${minutes} 分钟后领取 ${minutes * workRate} 元宝～`, 2600)
   }
 
   // 提前收工：不结算、清空会话（原版打工中途停止没有收益）
@@ -614,7 +606,6 @@ function createPetMachine() {
     working.value = false
     workLeftSec.value = 0
     workAccum = 0
-    workExpAccum = 0
     localStorage.removeItem('qqpet.work')
     window.api?.storageChanged?.()
     sayUntil('收工啦，这次没干完就没有工钱哦～', 2600)
@@ -622,14 +613,14 @@ function createPetMachine() {
     maybeResumeAuto()
   }
 
-  // 学习：同上，播 play SWF 表现学习，播完加经验并气泡播报
+  // 学习：同上，播 play SWF 表现学习（右键菜单里的快捷学习，无奖学金）
   function playStudy() {
-    studyRewardExp = 30
+    studyScholarship = 0
     playActivity('study')
   }
 
-  // 上课程：course = { id, name, cost, exp }
-  // 原版学习要选课程并交学费，课程越高级（小学→研究生）学费越贵、加的经验越多。
+  // 上课程：course = { id, name, cost, scholar }
+  // 原版学习要选课程并交学费，课程越高级（小学→研究生）学费越贵，完成后的奖学金也越多。
   function startStudyCourse(course) {
     if (studying.value) { sayUntil('正在上课，别打扰我～', 1800); return }
     if (sick.value) { play('speak', { keepSwf: true, user: true }); return }
@@ -637,7 +628,7 @@ function createPetMachine() {
     const cur = Number(localStorage.getItem('qqpet.coins')) || 0
     if (cur < cost) { sayUntil('元宝不够交学费啦，先去打工吧～', 2600); return }
     if (cost > 0) addCoins(-cost)
-    studyRewardExp = Number(course?.exp) || 30
+    studyScholarship = Number(course?.scholar) || 0
     localStorage.setItem('qqpet.lastCourse', JSON.stringify({ id: course?.id || '', name: course?.name || '课程' }))
     sayUntil(`开始上「${course?.name || '课程'}」～`, 2200)
     playActivity('study')
@@ -690,13 +681,18 @@ function createPetMachine() {
     }
   }
 
-  // 学习结算（打工结算由打工计时处理）
+  // 学习结算（打工结算由打工计时处理）：
+  // 原版完成课程发的是奖学金（元宝），不发成长值——成长值只由在线时长决定。
   function reward() {
-    addGrowth(studyRewardExp)
     const n = Number(localStorage.getItem('qqpet.studyCount')) || 0
     localStorage.setItem('qqpet.studyCount', String(n + 1))
     addDailyProgress('study')
-    sayUntil(`学习完成，成长值 +${studyRewardExp}！`, 3000)
+    if (studyScholarship > 0) {
+      addCoins(studyScholarship)
+      sayUntil(`学习完成，获得奖学金 ${studyScholarship} 元宝！`, 3000)
+    } else {
+      sayUntil('学习完成，又学到了新本事～', 3000)
+    }
   }
 
   // 点击互动：随机播当前阶段（Adult 走心情）interact 文件夹下的 SWF，播完回 Stand。
@@ -825,7 +821,6 @@ function createPetMachine() {
           workMinute = el
           for (let i = 0; i < delta; i++) {
             workAccum += workRate
-            workExpAccum += workExpRate
           }
           addDailyProgress('workMin', delta) // 每日任务：打工累计分钟
           dirty = true
@@ -845,13 +840,10 @@ function createPetMachine() {
           working.value = false
           workLeftSec.value = 0
           const amt = workAccum
-          const expAmt = workExpAccum
           workAccum = 0
-          workExpAccum = 0
           localStorage.removeItem('qqpet.work')
           addCoins(amt)
-          addGrowth(expAmt) // 打工成长值随元宝一并结算，享受心情成长加成
-          sayUntil(`打工完成，获得 ${amt} 元宝、成长值 +${expAmt}！`, 3200)
+          sayUntil(`打工完成，获得 ${amt} 元宝！`, 3200)
           backToStand()
           maybeResumeAuto()
           dirty = true

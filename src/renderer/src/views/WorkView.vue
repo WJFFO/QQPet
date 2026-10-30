@@ -24,9 +24,6 @@
         <div class="sc-row">
           <span class="k">已赚</span><span class="v gold">{{ earnedCoins }} 元宝</span>
         </div>
-        <div class="sc-row">
-          <span class="k">成长</span><span class="v">+{{ earnedExp }}</span>
-        </div>
         <QProgress :value="progress" color="blue" />
         <div class="sc-tip">打工期间饱食度、清洁度掉得更快，记得回家喂饭洗澡～</div>
         <button class="qq-btn" @click="stopWork">不干了</button>
@@ -56,9 +53,6 @@
           <span class="qq-weak">工资</span> <b class="gold">{{ selected.rate }}</b> 元宝/分钟
         </div>
         <div class="drow" v-if="selected">
-          <span class="qq-weak">成长</span> +{{ selected.exp }}/分钟
-        </div>
-        <div class="drow" v-if="selected">
           <span class="qq-weak">门槛</span> Lv.{{ selected.minLevel }}
         </div>
 
@@ -76,8 +70,7 @@
         </div>
 
         <div class="dsum" v-if="selected">
-          预计 <b class="gold">{{ selected.rate * minutes }}</b> 元宝 ·
-          <b class="gold">{{ selected.exp * minutes }}</b> 成长值
+          预计 <b class="gold">{{ selected.rate * minutes }}</b> 元宝
         </div>
 
         <button
@@ -99,31 +92,30 @@ import { asset } from '../ui/useSkin'
 
 // 岗位等级门槛由各岗位的 minLevel 决定（与宠物状态机的最小入职等级 5 级一致）
 
-// 原版打工岗位（图标取自 img_res/work，工资/经验按时长结算）
-// exp 是「每分钟额外成长值」。原版成长值主要由在线时长产生，打工期间本来就在线，
-// 所以这里只是小幅加成（2~8/分钟），不能盖过在线成长（心情 900+ 约 4.3/分钟）。
+// 原版打工岗位（图标取自 img_res/work，按时长结算元宝）。
+// 原版打工不发成长值（成长值只由在线时长决定），产出就是元宝。
 const JOBS = [
-  { id: 'bj', name: '保洁员', icon: 'bj.png', rate: 4, exp: 2, minLevel: 5 },
-  { id: 'bz', name: '保姆', icon: 'bz.png', rate: 4, exp: 2, minLevel: 5 },
-  { id: 'yd', name: '邮递员', icon: 'yd.png', rate: 5, exp: 2, minLevel: 5 },
-  { id: 'spg', name: '食品工', icon: 'spg.png', rate: 5, exp: 2, minLevel: 6 },
-  { id: 'cqz', name: '擦车工', icon: 'cqz.png', rate: 6, exp: 2, minLevel: 6 },
-  { id: 'cww', name: '宠物美容师', icon: 'cww.png', rate: 6, exp: 2, minLevel: 7 },
-  { id: 'ba', name: '保安', icon: 'ba.png', rate: 7, exp: 3, minLevel: 7 },
-  { id: 'sys', name: '饲养员', icon: 'sys.png', rate: 7, exp: 3, minLevel: 8 },
-  { id: 'jg', name: '技工', icon: 'jg.png', rate: 8, exp: 3, minLevel: 8 },
-  { id: 'jzs', name: '建筑工', icon: 'jzs.png', rate: 8, exp: 3, minLevel: 9 },
-  { id: 'jz', name: '家政', icon: 'jz.png', rate: 9, exp: 4, minLevel: 9 },
-  { id: 'jc', name: '警察', icon: 'jc.png', rate: 9, exp: 4, minLevel: 10 },
-  { id: 'jl', name: '教练', icon: 'jl.png', rate: 10, exp: 4, minLevel: 11 },
-  { id: 'ls', name: '老师', icon: 'ls.png', rate: 10, exp: 5, minLevel: 12 },
-  { id: 'wrm', name: '网管', icon: 'wrm.png', rate: 10, exp: 5, minLevel: 13 },
-  { id: 'mhj', name: '漫画家', icon: 'mhj.png', rate: 11, exp: 6, minLevel: 14 },
-  { id: 'gs', name: '歌手', icon: 'gs.png', rate: 11, exp: 6, minLevel: 15 },
-  { id: 'mj', name: '模特', icon: 'mj.png', rate: 11, exp: 6, minLevel: 16 },
-  { id: 'yy', name: '演员', icon: 'yy.png', rate: 12, exp: 7, minLevel: 18 },
-  { id: 'wdj', name: '舞蹈家', icon: 'wdj.png', rate: 12, exp: 7, minLevel: 20 },
-  { id: 'zhj', name: '指挥家', icon: 'zhj.png', rate: 12, exp: 8, minLevel: 22 }
+  { id: 'bj', name: '保洁员', icon: 'bj.png', rate: 4, minLevel: 5 },
+  { id: 'bz', name: '保姆', icon: 'bz.png', rate: 4, minLevel: 5 },
+  { id: 'yd', name: '邮递员', icon: 'yd.png', rate: 5, minLevel: 5 },
+  { id: 'spg', name: '食品工', icon: 'spg.png', rate: 5, minLevel: 6 },
+  { id: 'cqz', name: '擦车工', icon: 'cqz.png', rate: 6, minLevel: 6 },
+  { id: 'cww', name: '宠物美容师', icon: 'cww.png', rate: 6, minLevel: 7 },
+  { id: 'ba', name: '保安', icon: 'ba.png', rate: 7, minLevel: 7 },
+  { id: 'sys', name: '饲养员', icon: 'sys.png', rate: 7, minLevel: 8 },
+  { id: 'jg', name: '技工', icon: 'jg.png', rate: 8, minLevel: 8 },
+  { id: 'jzs', name: '建筑工', icon: 'jzs.png', rate: 8, minLevel: 9 },
+  { id: 'jz', name: '家政', icon: 'jz.png', rate: 9, minLevel: 9 },
+  { id: 'jc', name: '警察', icon: 'jc.png', rate: 9, minLevel: 10 },
+  { id: 'jl', name: '教练', icon: 'jl.png', rate: 10, minLevel: 11 },
+  { id: 'ls', name: '老师', icon: 'ls.png', rate: 10, minLevel: 12 },
+  { id: 'wrm', name: '网管', icon: 'wrm.png', rate: 10, minLevel: 13 },
+  { id: 'mhj', name: '漫画家', icon: 'mhj.png', rate: 11, minLevel: 14 },
+  { id: 'gs', name: '歌手', icon: 'gs.png', rate: 11, minLevel: 15 },
+  { id: 'mj', name: '模特', icon: 'mj.png', rate: 11, minLevel: 16 },
+  { id: 'yy', name: '演员', icon: 'yy.png', rate: 12, minLevel: 18 },
+  { id: 'wdj', name: '舞蹈家', icon: 'wdj.png', rate: 12, minLevel: 20 },
+  { id: 'zhj', name: '指挥家', icon: 'zhj.png', rate: 12, minLevel: 22 }
 ]
 
 const durations = [
@@ -170,12 +162,6 @@ const earnedCoins = computed(() => {
   const mins = Math.min(work.value.minutes, Math.floor((now.value - work.value.startAt) / 60000))
   return Math.max(0, mins * work.value.rate)
 })
-const earnedExp = computed(() => {
-  if (!work.value) return 0
-  const mins = Math.min(work.value.minutes, Math.floor((now.value - work.value.startAt) / 60000))
-  return Math.max(0, mins * work.value.exp)
-})
-
 const canStart = computed(() => !!selected.value && level.value >= selected.value.minLevel && !working.value)
 const startHint = computed(() => {
   if (!selected.value) return '请选择岗位'
@@ -186,8 +172,8 @@ const startHint = computed(() => {
 function start() {
   if (!canStart.value) return
   // 只传必要字段（图标 dataURL 不跨进程传，避免大 payload）
-  const { id, name, rate, exp } = selected.value
-  window.api.sendControlAction({ type: 'work-start', job: { id, name, rate, exp }, minutes: minutes.value })
+  const { id, name, rate } = selected.value
+  window.api.sendControlAction({ type: 'work-start', job: { id, name, rate }, minutes: minutes.value })
 }
 
 function stopWork() {

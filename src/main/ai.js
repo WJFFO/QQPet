@@ -10,6 +10,8 @@
  * 解析失败就整段当台词，action 视为 none，保证不会因为模型不听话就不能用。
  */
 
+import { app, net } from 'electron'
+
 // 没填时用的兜底地址（与设置页默认值一致）
 const DEFAULTS = {
   baseUrl: 'https://api.deepseek.com/v1',
@@ -301,6 +303,73 @@ export function parseReply(content) {
   }
 }
 
+/**
+ * 网络层：优先走 Electron 的 Chromium 网络栈（net.fetch）
+ *
+ * 主进程里的 globalThis.fetch 是 Node 自带的 undici，它只认 Node 打包的 Mozilla
+ * 根证书、不读 Windows 证书存储，也不会自动走系统代理和 PAC。而公司网络 / VPN 做
+ * HTTPS 解密时，用的是自己签发、只装在 Windows 里的根证书 —— 于是浏览器一切正常，
+ * undici 却一律报 SELF_SIGNED_CERT_IN_CHAIN。net.fetch 走 Chromium，证书校验和
+ * 代理策略都跟系统保持一致，这个坑就没了。
+ */
+function pickFetch() {
+  try {
+    if (net && typeof net.fetch === 'function' && app?.isReady?.()) return net.fetch.bind(net)
+  } catch {
+    /* 非 Electron 环境（脚本 / 单测）走下面的兜底 */
+  }
+  return globalThis.fetch.bind(globalThis)
+}
+
+// 常见的证书 / 网络错误 → 人话。触发最多的是公司 HTTPS 解密代理。
+const NET_HINT = {
+  SELF_SIGNED_CERT_IN_CHAIN: '证书链里有自签名根证书，多半是公司 / VPN 的 HTTPS 解密代理，而它的根证书不在受信列表里',
+  DEPTH_ZERO_SELF_SIGNED_CERT: '对方出示的是自签名证书，通常是 HTTPS 被中间代理接管了',
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: '证书链不完整或根证书不受信任，常见于 HTTPS 解密代理',
+  CERT_HAS_EXPIRED: '服务器证书已过期，也可能是代理自签的证书过期了',
+  ERR_CERT_AUTHORITY_INVALID: '证书颁发者不受信任，通常是被 HTTPS 解密代理重签了流量',
+  ENOTFOUND: '域名解析失败，检查接口地址有没有写错、网络是否通',
+  EAI_AGAIN: 'DNS 暂时不可用，稍后重试或检查 DNS / 代理设置',
+  ECONNREFUSED: '对方拒绝了连接，地址或端口不对，也可能是本地代理没开',
+  ECONNRESET: '连接被中断，常见于代理或防火墙掐断长连接',
+  ETIMEDOUT: '连接超时，网络不通或被墙了',
+  ERR_INVALID_URL: '接口地址格式不对，需要以 http:// 或 https:// 开头'
+}
+
+function describeError(e, timeoutMs) {
+  const name = e?.name || ''
+  if (name === 'TimeoutError' || name === 'AbortError') {
+    return `请求超时（${Math.round(timeoutMs / 1000)}s）`
+  }
+  const code = String(e?.cause?.code || e?.code || '')
+  const raw = String(e?.cause?.message || e?.message || e || '请求失败')
+  const hit = Object.keys(NET_HINT).find((k) => code.includes(k) || raw.includes(k))
+  if (hit) return `网络请求失败：${NET_HINT[hit]}（${hit}）`
+  return code && !raw.includes(code) ? `${raw}（${code}）` : raw
+}
+
+/** 统一出口：限定超时 + 走 Chromium 网络栈 */
+async function httpFetch(url, init = {}, timeoutMs = 45000) {
+  const ctrl = new AbortController()
+  let timer = null
+  // 部分 Electron 版本对 net.fetch 的 AbortSignal 支持不完整，这里再用 Promise.race
+  // 兜一层，保证超时一定有结果，不会让设置页的「测试连接」一直转圈。
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      ctrl.abort()
+      const err = new Error('请求超时')
+      err.name = 'TimeoutError'
+      reject(err)
+    }, timeoutMs)
+  })
+  try {
+    const doFetch = pickFetch()
+    return await Promise.race([doFetch(url, { ...init, signal: ctrl.signal }), timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 /** 调用一次 chat/completions，返回 { ok, content, parsed } 或 { ok:false, error } */
 export async function chat(payload = {}) {
   const {
@@ -343,18 +412,19 @@ export async function chat(payload = {}) {
     stream: false
   }
 
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
+    const res = await httpFetch(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    })
+      timeoutMs
+    )
 
     const text = await res.text()
     let data = null
@@ -389,14 +459,7 @@ export async function chat(payload = {}) {
       usage: { in: usage.prompt_tokens || 0, out: usage.completion_tokens || 0 }
     }
   } catch (e) {
-    const cause = e?.cause?.code || e?.cause?.message || ''
-    const msg =
-      e?.name === 'AbortError'
-        ? `请求超时（${Math.round(timeoutMs / 1000)}s）`
-        : `${e?.message || String(e)}${cause ? `（${cause}）` : ''}`
-    return { ok: false, error: msg }
-  } finally {
-    clearTimeout(timer)
+    return { ok: false, error: describeError(e, timeoutMs) }
   }
 }
 

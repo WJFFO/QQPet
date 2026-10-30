@@ -39,13 +39,13 @@
           <span class="qq-weak">学费</span> <b class="gold">{{ selected.cost }}</b> 元宝
         </div>
         <div class="drow" v-if="selected">
-          <span class="qq-weak">成长</span> +{{ selected.exp }}
+          <span class="qq-weak">奖学金</span> +{{ selected.scholar }} 元宝
         </div>
         <div class="drow" v-if="selected">
           <span class="qq-weak">门槛</span> Lv.{{ selected.minLevel }}
         </div>
         <div class="dtip">
-          上课会消耗学费，上完课宝贝获得成长值；心情越好，成长加成越高（最高 +30%）。
+          上课消耗学费，上完课宝贝拿到奖学金（元宝）；成长值靠在线时长慢慢攒。
         </div>
         <div class="dstat">
           <span class="qq-weak">已上课</span> {{ studyCount }} 次
@@ -65,10 +65,11 @@ import { asset } from '../ui/useSkin'
 
 // 原版课程的四个学段，各自 9 门科目（图标取自 img_res/study）
 const stages = [
-  { key: 'xx', label: '小学', minLevel: 1, cost: 10, exp: 40 },
-  { key: 'zx', label: '中学', minLevel: 5, cost: 25, exp: 90 },
-  { key: 'dx', label: '大学', minLevel: 10, cost: 50, exp: 180 },
-  { key: 'yjs', label: '研究生', minLevel: 20, cost: 90, exp: 320 }
+  // 原版完成课程发奖学金（元宝），不发成长值——成长值只由在线时长决定
+  { key: 'xx', label: '小学', minLevel: 1, cost: 10, scholar: 20 },
+  { key: 'zx', label: '中学', minLevel: 5, cost: 25, scholar: 50 },
+  { key: 'dx', label: '大学', minLevel: 10, cost: 50, scholar: 100 },
+  { key: 'yjs', label: '研究生', minLevel: 20, cost: 90, scholar: 150 }
 ]
 const subjects = [
   { key: 'chinese', label: '语文' },
@@ -99,7 +100,7 @@ function buildCourses() {
     name: `${s.label}${sub.label}`,
     file: `${s.key}-${sub.key}.png`,
     cost: s.cost,
-    exp: s.exp,
+    scholar: s.scholar,
     minLevel: s.minLevel
   }))
 }

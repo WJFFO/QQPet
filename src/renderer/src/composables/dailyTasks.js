@@ -4,19 +4,19 @@
  */
 
 export const DAILY_TASKS = [
-  { id: 'feed', label: '给宝贝喂食 1 次', target: 1, unit: '次', coins: 20, exp: 10 },
-  { id: 'wash', label: '给宝贝洗澡 1 次', target: 1, unit: '次', coins: 20, exp: 10 },
-  { id: 'workMin', label: '打工累计 10 分钟', target: 10, unit: '分钟', coins: 50, exp: 40 },
-  { id: 'study', label: '送宝贝上 1 节课', target: 1, unit: '次', coins: 30, exp: 20 },
-  { id: 'game', label: '陪宝贝玩 1 局小游戏', target: 1, unit: '局', coins: 30, exp: 15 }
+  { id: 'feed', label: '给宝贝喂食 1 次', target: 1, unit: '次', coins: 20, exp: 2 },
+  { id: 'wash', label: '给宝贝洗澡 1 次', target: 1, unit: '次', coins: 20, exp: 2 },
+  { id: 'workMin', label: '打工累计 10 分钟', target: 10, unit: '分钟', coins: 50, exp: 5 },
+  { id: 'study', label: '送宝贝上 1 节课', target: 1, unit: '次', coins: 30, exp: 3 },
+  { id: 'game', label: '陪宝贝玩 1 局小游戏', target: 1, unit: '局', coins: 30, exp: 2 }
 ]
 
 // 在线奖励：按今日累计在线分钟数解锁
 export const ONLINE_TIERS = [
-  { id: 't10', minutes: 10, coins: 20, exp: 10 },
-  { id: 't30', minutes: 30, coins: 50, exp: 30 },
-  { id: 't60', minutes: 60, coins: 100, exp: 80 },
-  { id: 't120', minutes: 120, coins: 200, exp: 150 }
+  { id: 't10', minutes: 10, coins: 20, exp: 1 },
+  { id: 't30', minutes: 30, coins: 50, exp: 3 },
+  { id: 't60', minutes: 60, coins: 100, exp: 8 },
+  { id: 't120', minutes: 120, coins: 200, exp: 15 }
 ]
 
 export const DAILY_KEY = 'qqpet.daily'
@@ -37,7 +37,7 @@ export function readDaily() {
     const raw = JSON.parse(localStorage.getItem(DAILY_KEY) || 'null')
     if (!raw || raw.date !== today()) return empty
     return { ...empty, ...raw, claimed: Array.isArray(raw.claimed) ? raw.claimed : [] }
-  } catch (_) {
+  } catch {
     return empty
   }
 }
@@ -61,7 +61,7 @@ export function readOnline() {
     const raw = JSON.parse(localStorage.getItem(ONLINE_KEY) || 'null')
     if (!raw || raw.date !== today()) return empty
     return { ...empty, ...raw, claimed: Array.isArray(raw.claimed) ? raw.claimed : [] }
-  } catch (_) {
+  } catch {
     return empty
   }
 }
