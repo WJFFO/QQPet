@@ -92,6 +92,11 @@
       <QProgress :value="pctOf(health, STAT_MAX.health)" color="red" class="line-bar" />
       <span class="val">{{ health }}</span>
     </div>
+    <div class="line" :title="`疲劳 ${fatigue} / ${STAT_MAX.fatigue}（${fatigueBand(fatigue).label}，打工/上课会累积，闲着自动恢复）`">
+      <span class="lbl">疲劳值</span>
+      <QProgress :value="pctOf(fatigue, STAT_MAX.fatigue)" color="orange" class="line-bar" />
+      <span class="val">{{ fatigue }}</span>
+    </div>
 
     <!-- 底部：元宝 / 在线 / 操作 -->
     <div class="foot">
@@ -116,8 +121,10 @@ import {
   hungerBand,
   cleanBand,
   moodBand,
+  fatigueBand,
   isHungerYellow,
-  isCleanYellow
+  isCleanYellow,
+  SICK_AT
 } from '../composables/stats'
 import { rememberPrevName } from '../composables/aiConfig'
 
@@ -132,7 +139,9 @@ const level = computed(() => levelFromTotal(totalExp.value))
 const hunger = ref(STAT_MAX.hunger)
 const clean = ref(STAT_MAX.clean)
 const health = ref(STAT_MAX.health)
+const fatigue = ref(0)
 const moodVal = ref(STAT_MAX.mood)
+const sickFlag = ref(localStorage.getItem('qqpet.sick') === '1')
 const coins = ref(0)
 
 /** 当前值占上限的百分比（QProgress 收 0~100） */
@@ -196,7 +205,7 @@ const stageKey = computed(() => `${gender.value}${band.value}`)
 const expNeed = computed(() => expToNext(totalExp.value))
 const expPct = computed(() => Math.round(levelProgress(totalExp.value) * 100))
 
-const isSick = computed(() => health.value <= 30)
+const isSick = computed(() => sickFlag.value || health.value <= SICK_AT)
 const isHungry = computed(() => isHungerYellow(hunger.value) || isCleanYellow(clean.value))
 const stateText = computed(() =>
   isSick.value ? '生病了，需要用药' : isHungry.value ? '又饿又脏，快照顾我～' : '活蹦乱跳'
@@ -234,6 +243,8 @@ function refreshAll() {
   hunger.value = readStat('qqpet.hunger', STAT_MAX.hunger)
   clean.value = readStat('qqpet.clean', STAT_MAX.clean)
   health.value = readStat('qqpet.health', STAT_MAX.health)
+  fatigue.value = readStat('qqpet.fatigue', 0)
+  sickFlag.value = localStorage.getItem('qqpet.sick') === '1'
   moodVal.value = readStat('qqpet.moodval', STAT_MAX.mood)
   coins.value = Number(localStorage.getItem('qqpet.coins')) || 0
 }

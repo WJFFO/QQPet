@@ -25,7 +25,7 @@
           <span class="k">已赚</span><span class="v gold">{{ earnedCoins }} 元宝</span>
         </div>
         <QProgress :value="progress" color="blue" />
-        <div class="sc-tip">打工期间饱食度、清洁度掉得更快，记得回家喂饭洗澡～</div>
+        <div class="sc-tip">打工期间饱食度、清洁度掉得更快，疲劳也会累积——超过 300 就开始拖垮健康，记得回家喂饭洗澡、歇一歇～</div>
         <button class="qq-btn" @click="stopWork">{{ stopLabel }}</button>
       </div>
     </div>

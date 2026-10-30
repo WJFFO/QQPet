@@ -24,9 +24,11 @@ import {
   MAX as STAT_MAX,
   CLEAN_PER_ITEM,
   SICK_AT,
+  FATIGUE_BAD,
   clamp as statClamp,
   migrateStat,
   moodBand as moodBandOf,
+  fatigueBand as fatigueBandOf,
   hungerBand,
   cleanBand,
   isHungerYellow,
@@ -126,6 +128,11 @@ function createPetMachine() {
   const hunger = ref(readStat('qqpet.hunger', STAT_MAX.hunger, STAT_MAX.hunger))
   const clean = ref(readStat('qqpet.clean', STAT_MAX.clean, STAT_MAX.clean))
   const health = ref(readStat('qqpet.health', STAT_MAX.health, STAT_MAX.health))
+  // 疲劳值：打工/学习攒起来，闲着快速恢复。老存档没有这个键，按 0 处理。
+  const fatigue = ref(statClamp(localStorage.getItem('qqpet.fatigue') ?? 0, STAT_MAX.fatigue))
+  // 生病标记：原版是概率生病、吃药才好，所以不能用「健康≤30」一个条件算出来。
+  // 存成独立标记，喂药时清掉；健康掉到 SICK_AT 以下时仍然强制生病（兜底）。
+  const sickState = ref(localStorage.getItem('qqpet.sick') === '1')
   // 迁移后立刻把换算结果落盘：只写版本标记不写值的话，中途退出会留下
   // 「statsVer=2 + 旧百分比」的脏组合，下次启动就不再迁移，直接按绝对值读成 7%。
   if (legacyStats) {
@@ -205,11 +212,12 @@ function createPetMachine() {
     if (n && n !== petName.value) petName.value = n
   })
 
-  // 生病阈值：健康 ≤ 该值时进入生病态。
-  // 生病阈值 SICK_AT 统一在 stats.js（健康 ≤30 进入生病态）。
+  // 生病判定：两个来源取或
+  //   1. sickState —— 概率生病掷中了，必须吃药才好（健康回满也不会自己好）
+  //   2. health ≤ SICK_AT —— 硬兜底，健康烂到这个程度必定生病
   // 生病时不播 play 动画（全阶段）；Egg/Kid 生病时 standby 恒用 Sick.swf（不播 Stand）。
   // 注意：健康归零只会一直是生病态，不会死亡（已按需求移除死亡机制）。
-  const sick = computed(() => health.value <= SICK_AT)
+  const sick = computed(() => sickState.value || health.value <= SICK_AT)
 
   // 心情（仅 Adult 生效）：以「心情值」为主决定显形表情目录，仅在健康濒危时用状态兜底。
   // 心情档位：兴奋≥900 / 高兴≥600 → happy；平静≥400 → peaceful；郁闷≥200 → sad；低落<200 → upset。
@@ -274,6 +282,8 @@ function createPetMachine() {
     localStorage.setItem('qqpet.clean', String(clean.value))
     localStorage.setItem('qqpet.health', String(health.value))
     localStorage.setItem('qqpet.moodval', String(moodVal.value))
+    localStorage.setItem('qqpet.fatigue', String(fatigue.value))
+    localStorage.setItem('qqpet.sick', sickState.value ? '1' : '0')
   }
 
   let evolveTimer = null // 进化兜底定时器：不参与 clearTimers，防止进化回调被后续动作清掉后永久卡死
@@ -412,7 +422,7 @@ function createPetMachine() {
   // 查看状态：气泡播报属性（按原版绝对值 + 上限）与心情
   function sayStatus() {
     const m = stage.value.endsWith('/Adult') ? mood.value : ''
-    const base = `饱食 ${hunger.value}/${STAT_MAX.hunger} 清洁 ${clean.value}/${STAT_MAX.clean} 心情 ${moodVal.value}/${STAT_MAX.mood} 健康 ${health.value}/${STAT_MAX.health}`
+    const base = `饱食 ${hunger.value}/${STAT_MAX.hunger} 清洁 ${clean.value}/${STAT_MAX.clean} 心情 ${moodVal.value}/${STAT_MAX.mood} 健康 ${health.value}/${STAT_MAX.health} 疲劳 ${fatigue.value}/${STAT_MAX.fatigue}`
     sayUntil(m ? `${base}（${m}）` : base, 4000)
   }
 
@@ -828,14 +838,32 @@ function createPetMachine() {
       const elapsed = nowStat - lastDecayAt
       lastDecayAt = nowStat
       const decayed = stepDecay(
-        { hunger: hunger.value, clean: clean.value, health: health.value, mood: moodVal.value },
+        {
+          hunger: hunger.value,
+          clean: clean.value,
+          health: health.value,
+          mood: moodVal.value,
+          fatigue: fatigue.value,
+          sick: sick.value
+        },
         decayAcc,
         elapsed,
-        { working: working.value }
+        { working: working.value, studying: studying.value }
       )
       if (decayed.hunger !== hunger.value) { hunger.value = decayed.hunger; dirty = true }
       if (decayed.clean !== clean.value) { clean.value = decayed.clean; dirty = true }
       if (decayed.health !== health.value) { health.value = decayed.health; dirty = true }
+      if (decayed.fatigue !== fatigue.value) { fatigue.value = decayed.fatigue; dirty = true }
+      if (decayed.gotSick && !sickState.value) {
+        // 概率生病掷中：落标记，等主人喂药；健康回满也不会自己好
+        sickState.value = true
+        localStorage.setItem('qqpet.sick', '1')
+        if (!backTimer && !awaitingMeta && !evolving) {
+          play('sick', { user: false })
+          sayUntil('咳咳…我好像生病了，主人快买点药吧', 3500)
+        }
+        dirty = true
+      }
       if (decayed.mood !== moodVal.value) {
         moodVal.value = decayed.mood
         localStorage.setItem('qqpet.moodval', String(decayed.mood))
@@ -899,7 +927,7 @@ function createPetMachine() {
       // 优先级：生病 > 饥饿 > 脏；各自节流避免刷屏。
       if (idle) {
         const nowHint = Date.now()
-        if (health.value <= SICK_AT && nowHint - lastSickAt >= 40 * 1000) { // 健康低于阈值 → 触发"生病"提醒动画
+        if (sick.value && nowHint - lastSickAt >= 40 * 1000) { // 生病（含概率生病）→ 触发提醒动画
           lastSickAt = nowHint
           play('sick', { user: false })
           dirty = false
@@ -1007,7 +1035,7 @@ function createPetMachine() {
     '讲个一句话的小笑话'
   ]
   // 告急状态的中文说法（搭话 prompt 用）
-  const URGE_CN = { hungry: '肚子饿了', dirty: '身上脏了', sick: '身体不舒服', sad: '心情很低落' }
+  const URGE_CN = { hungry: '肚子饿了', dirty: '身上脏了', sick: '身体不舒服', tired: '累得不行', sad: '心情很低落' }
 
   // 统一走 aiConfig 读取（老 provider 配置会自动迁移成 baseUrl/model）
   function readAiCfg() {
@@ -1017,8 +1045,10 @@ function createPetMachine() {
 
   // 当前最需要被关注的状态（决定开口频率与话题）
   function urgentState() {
+    if (sick.value) return 'sick'
     if (isHungerYellow(hunger.value)) return 'hungry'
     if (isCleanYellow(clean.value)) return 'dirty'
+    if (fatigue.value >= FATIGUE_BAD) return 'tired'
     if (health.value <= 50) return 'sick'
     if (moodVal.value <= 300) return 'sad'
     return ''
@@ -1092,7 +1122,7 @@ function createPetMachine() {
             role: 'user',
             content: [
               // 状态只给档位描述，不给数字——给了数字模型就会把它们念出来
-              `现在心情「${moodBand(moodVal.value).label}」，饱食「${hungerBand(hunger.value).label}」，清洁「${cleanBand(clean.value).label}」，健康${health.value <= 50 ? '不太好' : '还好'}。`,
+              `现在心情「${moodBand(moodVal.value).label}」，饱食「${hungerBand(hunger.value).label}」，清洁「${cleanBand(clean.value).label}」，健康${sick.value ? '生病了' : health.value <= 50 ? '不太好' : '还好'}，体力「${fatigueBandOf(fatigue.value).label}」。`,
               urge
                 ? `其实是${URGE_CN[urge] || urge}才开口的，话要往这上面引，让主人注意到并帮忙。`
                 : `这次想聊：${AUTO_TOPICS[Math.floor(Math.random() * AUTO_TOPICS.length)]}。`,
@@ -1145,7 +1175,7 @@ function createPetMachine() {
     if (localStorage.getItem('qqpet.noticeOff') === '1') return
     if (Date.now() - lastNoticeAt < NOTICE_GAP) return
     let text = ''
-    if (health.value <= SICK_AT) text = '宝贝好像生病了，快去商店买点药，别让它硬扛着～'
+    if (sick.value) text = '宝贝好像生病了，快去商店买点药，别让它硬扛着～'
     else if (isHungerYellow(hunger.value)) text = '宝贝肚子饿得咕咕叫了，右键喂点东西吃吧～'
     else if (isCleanYellow(clean.value)) text = '宝贝身上脏脏的，快帮它洗个澡吧～'
     else {
@@ -1322,8 +1352,9 @@ function createPetMachine() {
       : (action && typeof action === 'object' && (action.type === 'eat' || action.type === 'clean' || action.type === 'cure')) ? action.type
       : null
     if (consumeEffect) {
-      // 健康满的时候别浪费药：菜单里的「喂药」是常驻项，随手点一下不该扣道具
-      if (consumeEffect === 'cure' && health.value >= STAT_MAX.health) {
+      // 健康满且没生病的时候别浪费药：菜单里的「喂药」是常驻项，随手点一下不该扣道具。
+      // 注意要连 sickState 一起判：概率生病时健康可能还是满的，但病没好，药该吃。
+      if (consumeEffect === 'cure' && health.value >= STAT_MAX.health && !sickState.value) {
         sayUntil('我现在健健康康的，不用吃药～', 2600)
         return
       }
@@ -1347,7 +1378,13 @@ function createPetMachine() {
       // 洗澡按原版换算：日用品 +180，上限 720 —— 一次只洗四分之一，
       // 想洗干净得多洗几次。这里不再直接洗满（那是上一版为了压住"还痒"做的偏离）。
       else if (consumeEffect === 'clean') { clean.value = Math.min(STAT_MAX.clean, clean.value + v); addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
-      else if (consumeEffect === 'cure') { health.value = Math.min(STAT_MAX.health, health.value + v); addGrowth(6) }
+      else if (consumeEffect === 'cure') {
+        health.value = Math.min(STAT_MAX.health, health.value + v)
+        // 吃药才算治好：概率生病是独立标记，不靠健康值自动消
+        sickState.value = false
+        localStorage.setItem('qqpet.sick', '0')
+        addGrowth(6)
+      }
       // 记一笔给 AI：数值变了模型能读到，但它不知道「是主人刚做的」，
       // 于是喂完照样喊饿。动作本身也要进上下文。
       recordAct(consumeEffect, item.name)
@@ -1491,6 +1528,8 @@ function createPetMachine() {
     hunger,
     clean,
     health,
+    fatigue,
+    sick,
     mood,
     moodVal,
     working,

@@ -6,7 +6,11 @@
  * 衰减（原版百科「成长消耗」）：成长/学习/打工/休息状态下饥饿 -2/分钟、清洁 -2/分钟；
  *   打工时消耗更快，饥饿 -4/分钟、清洁 -3/分钟。
  * 心情值 0~1000，-2/分钟；饥饿或清洁变黄且不处理时掉得很快（-15/分钟以上）。
- * 健康值 0~100：饥饿、清洁、心情任一为黄色警告时 -2/分钟，全部恢复正常后 +1/分钟。
+ * 健康值 0~100：饥饿、清洁、心情任一为黄色警告时 -2/分钟，全部恢复正常后 +1/分钟；
+ *   疲劳 ≥300 再额外 -2/分钟（原版：打工/学习攒疲劳，累了掉健康）。
+ * 疲劳值 0~600：打工 +4/分钟、学习 +1/分钟、空闲恢复 16/分钟（原版数值）。
+ * 生病：原版是概率性的（健康越底越容易病，累了更容易病），这里用 sickChance 实现，
+ *   健康 ≤30 作为必病的硬兜底。
  * 状态文案沿用原版档位：吃得很饱 / 不饿 / 有点饿 / 很饿，干干净净 / 好痒啊 / 蓬头垢面。
  */
 
@@ -14,7 +18,8 @@ export const MAX = {
   hunger: 1080,
   clean: 720,
   mood: 1000,
-  health: 100
+  health: 100,
+  fatigue: 600
 }
 
 /**
@@ -31,8 +36,17 @@ export const RATE = {
   mood: 2,
   moodBad: 15,
   healthBad: 2,
-  healthGood: 1
+  healthGood: 1,
+  /** 生病且没吃药时健康继续恶化（原版是不治会死，这里只掉到 1 不会死） */
+  healthSick: 1,
+  /** 疲劳：打工 +4/分钟、学习 +1/分钟、空闲恢复 16/分钟（原版数值） */
+  fatigueWork: 4,
+  fatigueStudy: 1,
+  fatigueRest: 16
 }
+
+/** 疲劳阈值：到这个值以后每分钟额外掉 2 点健康（原版） */
+export const FATIGUE_BAD = 300
 
 /** 打工时饥饿/清洁的加速倍率（原版：饥饿 4/分钟、清洁 3/分钟） */
 export const WORK_MULT = {
@@ -47,8 +61,36 @@ export const YELLOW = {
   mood: 600
 }
 
-/** 生病阈值：健康低于该值进入生病态 */
+/** 生病阈值：健康低于该值必定生病（概率生病的兜底线，也是 UI 的硬线） */
 export const SICK_AT = 30
+
+/**
+ * 每分钟随机生病的概率。
+ *
+ * 原版是概率生病，不是到了某个数就一定病（老玩家资料里「健康值同样低下时，
+ * 武力值高的宠物生病几率低」也说明是掷骰）。这里用健康做唯一变量，疲劳做倍率：
+ *   - 健康 ≥70：不会随机生病，正常养着很安全
+ *   - 健康 70→30 线性升高：约 0.075%/分钟 → 3%/分钟
+ *   - 疲劳 ≥300 概率 ×2，≥200 概率 ×1.4（累了更容易病）
+ * 健康 ≤30 的必病由 SICK_AT 兜底，不走这个概率。
+ */
+export function sickChance(health, fatigue = 0) {
+  const h = Number(health) || 0
+  if (h >= 70) return 0
+  const base = Math.min(1, (70 - h) / 40) * 0.03
+  const f = Number(fatigue) || 0
+  const mul = f >= FATIGUE_BAD ? 2 : f >= 200 ? 1.4 : 1
+  return Math.min(1, base * mul)
+}
+
+/** 疲劳档位（0~600）。原版只规定了 300 这个掉健康的线，档位文案是我们补的 */
+export function fatigueBand(v) {
+  const f = Number(v) || 0
+  if (f >= FATIGUE_BAD) return { key: 'exhausted', label: '累坏了' }
+  if (f >= 200) return { key: 'tired', label: '有点累' }
+  if (f >= 100) return { key: 'normal', label: '还行' }
+  return { key: 'fresh', label: '精神很好' }
+}
 
 export function clamp(v, max) {
   const n = Number(v)

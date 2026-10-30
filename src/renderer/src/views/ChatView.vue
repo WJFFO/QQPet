@@ -83,7 +83,7 @@ import {
   SELF_REF_RULE,
   recentActsText
 } from '../composables/aiConfig'
-import { hungerBand, cleanBand, moodBand, SICK_AT, MAX as STAT_MAX } from '../composables/stats'
+import { hungerBand, cleanBand, moodBand, fatigueBand, SICK_AT, MAX as STAT_MAX } from '../composables/stats'
 
 // 动作名 → 中文，仅用于气泡下方的小标签
 const ACTION_LABEL = {
@@ -216,6 +216,9 @@ function petState() {
     hunger: n('qqpet.hunger', STAT_MAX.hunger),
     clean: n('qqpet.clean', STAT_MAX.clean),
     health: n('qqpet.health', STAT_MAX.health),
+    fatigue: n('qqpet.fatigue', 0),
+    // 概率生病是独立标记：健康可能还是满的，但病没好，不能只看数值
+    sick: localStorage.getItem('qqpet.sick') === '1',
     mood: n('qqpet.moodval', STAT_MAX.mood),
     coins: n('qqpet.coins', 0)
   }
@@ -226,7 +229,7 @@ function systemPrompt(personaChanged = false) {
   const persona = personaText(cfg.value.persona)
   // 状态用档位而不是数字：给了数字模型会照着念出来，而且「饱食 100」这种
   // 绝对值它不一定能理解成「刚吃饱」
-  const healthText = s.health >= 80 ? '很健康' : s.health > SICK_AT ? '有点不舒服' : '生病了'
+  const healthText = s.sick || s.health <= SICK_AT ? '生病了' : s.health >= 80 ? '很健康' : '有点不舒服'
   // 主人刚喂过/治过病：光靠上面的状态值不够，模型会顺着历史里那句「我好饿」继续演
   const actsText = recentActsText()
   // 没设过称呼时回退到 QQ 号，那种情况还是按「主人」叫，别让模型念一串数字
@@ -246,7 +249,7 @@ function systemPrompt(personaChanged = false) {
     personaChanged
       ? '【刚换过性格】主人刚刚给你换了新性格，历史消息里的说话方式全部作废，从这一句起严格按新人设开口。'
       : '',
-    `当前状态（此刻）：饱食「${hungerBand(s.hunger).label}」，清洁「${cleanBand(s.clean).label}」，健康「${healthText}」，心情「${moodBand(s.mood).label}」，等级 ${s.level}。`,
+    `当前状态（此刻）：饱食「${hungerBand(s.hunger).label}」，清洁「${cleanBand(s.clean).label}」，健康「${healthText}」，体力「${fatigueBand(s.fatigue).label}」，心情「${moodBand(s.mood).label}」，等级 ${s.level}。`,
     actsText
       ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了，别把做过的事说成没做（刚喂过还喊没吃的、刚洗过还说没人管）。状态按上面给的档位如实说：饱食没到「吃得很饱」可以撒娇再要一口，清洁没到「干干净净」可以撒娇说想再洗一次。`
       : '',

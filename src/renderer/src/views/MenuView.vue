@@ -42,9 +42,11 @@ import { SICK_AT } from '../composables/stats'
 // 标题显示当前昵称与等级（档案页改名后重开菜单即同步）。
 const nick = ref(localStorage.getItem('qqpet.name') || 'QQ宠物')
 const lvl = ref(Number(localStorage.getItem('qqpet.level')) || 1)
-// 生病时把「喂药」顶到最前面并标出来，免得像以前那样只能翻背包找药
+// 生病时把「喂药」顶到最前面并标出来，免得像以前那样只能翻背包找药。
+// 生病有两个来源：概率生病留下的标记，以及健康掉到硬线以下。
 const health = ref(Number(localStorage.getItem('qqpet.health') ?? 100))
-const sick = computed(() => health.value <= SICK_AT)
+const sickFlag = ref(localStorage.getItem('qqpet.sick') === '1')
+const sick = computed(() => sickFlag.value || health.value <= SICK_AT)
 
 const items = computed(() => [
   ...(sick.value ? [{ action: 'cure', label: '喂药（生病了）', icon: 'zhibing', alert: true }] : []),
