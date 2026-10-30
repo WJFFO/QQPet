@@ -1046,6 +1046,9 @@ function createPetMachine() {
       const memText = normalizeNames(memParts.join('\n'))
       // 刚喂过/刚治过病：让开口时知道，否则它会照着历史里的「我好饿」继续说
       const actsText = recentActsText()
+      // 主人称呼实时读 + 判断是不是 QQ 号回退值，是的话仍按「主人」叫
+      const ownerNow = (localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人').trim()
+      const ownerCall = /^\d+$/.test(ownerNow) ? '主人' : ownerNow
 
       const res = await window.api.aiChat({
         apiKey: cfg.apiKey,
@@ -1058,7 +1061,8 @@ function createPetMachine() {
             content: [
               `【人设·最高优先级】${personaText(cfg.persona)}`,
               // 名字实时读 localStorage：改名后这个窗口的 petName ref 不一定已经刷新
-              `你是桌面宠物「${localStorage.getItem('qqpet.name') || petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。名字以这一行为准，记忆或历史里出现的其他名字都是旧称呼，不要再使用。说话要贴合上面的人设。`,
+              `你是桌面宠物「${localStorage.getItem('qqpet.name') || petName.value || '宝贝'}」，主人叫「${ownerNow}」。名字以这一行为准，记忆或历史里出现的其他名字都是旧称呼，不要再使用。说话要贴合上面的人设。`,
+              ownerCall === '主人' ? '' : `称呼主人时直接叫「${ownerCall}」，不要通篇只喊「主人」。`,
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。记忆只提供事实，语气按人设来。` : '',
               SELF_REF_RULE,
               actsText

@@ -229,11 +229,16 @@ function systemPrompt(personaChanged = false) {
   const healthText = s.health >= 80 ? '很健康' : s.health > SICK_AT ? '有点不舒服' : '生病了'
   // 主人刚喂过/治过病：光靠上面的状态值不够，模型会顺着历史里那句「我好饿」继续演
   const actsText = recentActsText()
+  // 没设过称呼时回退到 QQ 号，那种情况还是按「主人」叫，别让模型念一串数字
+  const ownerRaw = String(s.owner || '').trim()
+  const ownerCall = /^\d+$/.test(ownerRaw) ? '主人' : ownerRaw
   return [
     // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
     `【人设·最高优先级】${persona}`,
     // 名字以这一行为准：改名后历史里全是旧称呼，不点明模型会照着旧名字叫
     `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。名字以这一行为准，历史消息或记忆里出现的其他名字都是以前用过的旧称呼，不要再使用。说话的语气、口头禅、称呼都要贴合上面的人设。`,
+    // 光给名字不够：模型容易一直用「主人」这个泛称，等于改名没被感知
+    ownerCall === '主人' ? '' : `称呼主人时直接叫「${ownerCall}」，不要通篇只喊「主人」。`,
     // 称呼是唯一不随性格变的东西：统一用「我」，中二/傲娇怎么演都不会冒出「本座」
     SELF_REF_RULE,
     // 上下文里的历史是旧语气时，模型会照着学，光靠上面一句压不住，得显式作废
