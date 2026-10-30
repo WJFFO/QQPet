@@ -1,9 +1,9 @@
 {
-  "name": "qqpet",
-  "version": "1.0.0",
+  "name": "QQPet",
+  "version": "1.1.0",
   "description": "QQ宠物",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "whnbd",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",

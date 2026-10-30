@@ -1,0 +1,355 @@
+/* ==========================================================================
+   原版 QQ 宠物皮肤（蓝白玻璃）
+   色值全部采样自 resources/assets/Menu、stateInfo 的原版切片像素：
+     - 面板描边      #55709B（Menu/ditu00.png 左边框）
+     - 面板渐变      #E9FAFF → #F4FCFF → #FFFFFF（Menu/ditu01.png 竖向中心条）
+     - 标题栏渐变    #7EBBE7 → #6698C7（Menu/ditu01.bmp 顶部条）
+     - 菜单项高亮    #7398D0 / #81DEF8（Menu/ditu04.bmp）
+     - 文字主色      #2B4A72，弱化 #5B7BA3
+   字体沿用原版宋体 12px，这是"原版感"的关键。
+   ========================================================================== */
+
+:root {
+  --qq-border: #55709b;
+  --qq-border-soft: #8fabc9;
+  --qq-border-deep: #3c5a86;
+  --qq-panel-top: #e9faff;
+  --qq-panel-mid: #f4fcff;
+  --qq-panel-bot: #ffffff;
+  --qq-title-top: #7ebbe7;
+  --qq-title-bot: #6698c7;
+  --qq-hover: #d9edfd;
+  --qq-sel: #bfe3f9;
+  --qq-text: #2b4a72;
+  --qq-text-weak: #5b7ba3;
+  --qq-text-gold: #8e580a;
+  --qq-shadow: 0 3px 10px rgba(35, 64, 110, 0.28);
+  --qq-inset: inset 0 0 0 1px #fff, inset 0 1px 3px rgba(85, 112, 155, 0.22);
+}
+
+/* 所有窗口统一的根样式：透明背景 + 宋体 + 禁止选中 */
+.qq-root,
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 98%;
+  height: 98%;
+  background: transparent;
+  overflow: hidden;
+  /* -webkit-user-select: none; */
+  /* user-select: none; */
+  font-family: '宋体', SimSun, 'Microsoft YaHei', sans-serif;
+  font-size: 12px;
+  color: var(--qq-text);
+  cursor: default;
+}
+
+/* ---------------- 外框（整窗皮肤） ---------------- */
+.qq-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--qq-border);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--qq-panel-top) 0%, var(--qq-panel-mid) 45%, var(--qq-panel-bot) 100%);
+  box-shadow: var(--qq-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+}
+
+/* 标题栏：原版浅蓝渐变条，左侧图标 + 标题，右侧按钮 */
+.qq-titlebar {
+  position: relative;
+  flex: none;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 8px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, var(--qq-title-top) 0%, var(--qq-title-bot) 100%);
+  border-bottom: 1px solid var(--qq-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  -webkit-app-region: drag;
+}
+.qq-titlebar .qq-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(35, 64, 110, 0.55);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qq-titlebar .qq-title-extra {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  color: #23406e;
+  white-space: nowrap;
+}
+.qq-titlebar .qq-title-extra b {
+  color: #b86a00;
+  font-size: 12px;
+}
+
+/* 关闭按钮：原版红色圆角小方块（悬停加深） */
+.qq-close {
+  -webkit-app-region: no-drag;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ff8a95 0%, #e02b4a 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.qq-close:hover {
+  background: linear-gradient(180deg, #ff9fa8 0%, #f03a59 100%);
+}
+.qq-close:active {
+  background: linear-gradient(180deg, #d83450 0%, #b01f3a 100%);
+}
+
+/* ---------------- 内嵌面板 ---------------- */
+.qq-panel {
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--qq-border-soft);
+  border-radius: 5px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3faff 100%);
+  box-shadow: var(--qq-inset);
+}
+.qq-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: #23406e;
+  background: linear-gradient(180deg, #f2fbff 0%, #dceefb 100%);
+  border-bottom: 1px solid #d3e5f4;
+  border-radius: 4px 4px 0 0;
+}
+
+/* 虚线分隔（原版档案卡上的虚线标签框） */
+.qq-dashed {
+  border: 1px dashed #9db9d4;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+/* ---------------- 左侧竖排标签（原版商店分类） ---------------- */
+.qq-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.qq-side-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--qq-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.qq-side-item:hover {
+  background: linear-gradient(90deg, #eaf7ff 0%, #d3ebfb 100%);
+}
+.qq-side-item.active {
+  background: linear-gradient(90deg, #cbe8fb 0%, #a9d7f6 100%);
+  box-shadow: inset 0 0 0 1px #8cc0e4;
+  font-weight: bold;
+  color: #17385f;
+}
+.qq-side-item.active::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #7ebbe7, #3d78b5);
+}
+
+/* ---------------- 横向标签页（原版 73x27 分类标签） ---------------- */
+.qq-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding-left: 4px;
+  height: 27px;
+  -webkit-app-region: no-drag;
+}
+.qq-tab {
+  height: 24px;
+  min-width: 60px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--qq-border-soft);
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, #dceffb 0%, #c3e2f6 100%);
+  color: #35577f;
+  cursor: pointer;
+}
+.qq-tab:hover {
+  background: linear-gradient(180deg, #eaf8ff 0%, #d5edfc 100%);
+}
+.qq-tab.active {
+  height: 27px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4fbff 100%);
+  color: #1b3d67;
+  font-weight: bold;
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+/* ---------------- 通用按钮（原版图未覆盖处用同色系补齐） ---------------- */
+.qq-btn {
+  height: 22px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid #7ba2cd;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #fdfeff 0%, #dcecf9 48%, #c4dff3 52%, #eaf6fe 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+  color: #23406e;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.qq-btn:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #eaf8ff 48%, #d3ecfd 52%, #f4fbff 100%);
+}
+.qq-btn:active {
+  background: linear-gradient(180deg, #c3dff3 0%, #a9d3ef 100%);
+}
+.qq-btn:disabled {
+  color: #9ab0c6;
+  border-color: #c2d3e2;
+  background: linear-gradient(180deg, #f7fafc 0%, #e9f0f6 100%);
+  cursor: not-allowed;
+}
+.qq-btn.primary {
+  border-color: #d86a1f;
+  background: linear-gradient(180deg, #ffd98b 0%, #ffb44a 48%, #ff9a2e 52%, #ffd07a 100%);
+  color: #6b3600;
+  font-weight: bold;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.qq-btn.primary:hover {
+  background: linear-gradient(180deg, #ffe4a6 0%, #ffc163 48%, #ffa942 52%, #ffdc94 100%);
+}
+
+/* ---------------- 输入框 ---------------- */
+.qq-input {
+  height: 19px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid #9db9d4;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(85, 112, 155, 0.18);
+  font-family: inherit;
+  font-size: 12px;
+  color: #22405f;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.qq-input:focus {
+  border-color: #5b9ad4;
+  box-shadow: inset 0 1px 2px rgba(85, 112, 155, 0.18), 0 0 4px rgba(91, 154, 212, 0.55);
+}
+
+/* ---------------- 滚动条（原版细蓝条） ---------------- */
+.qq-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.qq-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.qq-scroll::-webkit-scrollbar-track {
+  background: #eef6fc;
+  border-left: 1px solid #dbe9f5;
+}
+.qq-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cfe7fa, #9fc8e8);
+  border: 1px solid #86b4d9;
+  border-radius: 5px;
+}
+.qq-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #e2f2ff, #b6d8f2);
+}
+
+/* ---------------- 商品 / 物品格子 ---------------- */
+.qq-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid #c9dced;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f9ff 100%);
+  cursor: pointer;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.qq-cell:hover {
+  border-color: #7eb6e0;
+  box-shadow: 0 0 0 1px #b8dcf5 inset, 0 1px 4px rgba(85, 112, 155, 0.25);
+}
+.qq-cell.active {
+  border-color: #f0a24a;
+  box-shadow: 0 0 0 2px rgba(255, 178, 80, 0.55), inset 0 0 6px rgba(255, 205, 130, 0.5);
+  background: linear-gradient(180deg, #fffdf4 0%, #fff3dc 100%);
+}
+
+/* 文字工具类 */
+.qq-gold {
+  color: var(--qq-text-gold);
+}
+.qq-weak {
+  color: var(--qq-text-weak);
+}
+.qq-empty {
+  padding-top: 60px;
+  text-align: center;
+  color: #96aec7;
+  font-size: 12px;
+}

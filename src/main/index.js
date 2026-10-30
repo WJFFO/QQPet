@@ -5,6 +5,9 @@ import zlib from 'zlib'
 import { TextDecoder } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/assets/penguin.ico?asset'
+import { chat as aiChat, test as aiTest, DEFAULTS as AI_DEFAULTS } from './ai'
+import * as memory from './memoryStore'
+import * as dataDir from './dataDir'
 
 let mainWindow = null
 let loginWindow = null
@@ -14,6 +17,8 @@ let trayTopItem = null // 托盘"宠物置顶"勾选项引用（与右键菜单�
 let trayThroughItem = null // 托盘"鼠标穿透"勾选项引用
 let centerWindow = null // 商店/小游戏/宠物信息/背包 四合一中心窗口（独立）
 let menuWindow = null // 宠物右键菜单窗口（QQ宠物风格，独立）
+// 辅助小窗（设置 / 帮助 / 退出确认）：key → BrowserWindow，统一单例管理
+const auxWindows = new Map()
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('disable-features', 'WindowsDocking')
 }
@@ -70,9 +75,14 @@ function createWindow() {
  
 }
 
-// 创建中心窗口（商店/小游戏/宠物信息三合一，顶部标签栏切换；tab = 'shop'|'game'|'info'）
+// 创建中心窗口（宠物档案/商店/背包/小游戏/打工/学习 合一，左侧导航切换；tab 决定初始页）
 function createCenterWindow(tab) {
-  if (centerWindow && !centerWindow.isDestroyed()) { centerWindow.focus(); return }
+  if (centerWindow && !centerWindow.isDestroyed()) {
+    centerWindow.focus()
+    // 已打开：不再重建窗口，直接通知渲染层切页签（保持各页状态）
+    if (tab) centerWindow.webContents.send('center-tab', tab)
+    return
+  }
   centerWindow = new BrowserWindow({
     width: 700,
     height: 520,
@@ -97,8 +107,81 @@ function createCenterWindow(tab) {
   }
 }
 
-// 解析 SWF 文件头，计算总播放时长（毫秒）。
-// SWF 头：签名(3) + 版本(1) + 文件长(4) + RECT + frameRate(UI16,8.8定点) + frameCount(UI16)。
+// 通用辅助窗口（设置 350×311 / 帮助 350×197 / 退出确认 253×81）
+// 同一 key 只保留一个实例，重复触发时聚焦已有窗口
+function createAuxWindow(key, { file, width, height, center = true, modal = false, search = '' }) {
+  const exist = auxWindows.get(key)
+  if (exist && !exist.isDestroyed()) {
+    exist.focus()
+    return exist
+  }
+  const win = new BrowserWindow({
+    width,
+    height,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    frame: false,
+    transparent: true,
+    parent: modal ? mainWindow : undefined,
+    icon,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      spellcheck: false
+    }
+  })
+  if (center) win.center()
+  win.on('closed', () => auxWindows.delete(key))
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/${file}${search ? `?${search}` : ''}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer', file), search ? { search } : undefined)
+  }
+  auxWindows.set(key, win)
+  return win
+}
+
+function openSettings() {
+  return createAuxWindow('settings', { file: 'settings.html', width: 350, height: 311 })
+}
+function openHelp() {
+  return createAuxWindow('help', { file: 'help.html', width: 350, height: 230 })
+}
+function openConfirm() {
+  return createAuxWindow('confirm', { file: 'confirm.html', width: 253, height: 81, modal: true })
+}
+
+// 通用提示框：文本/模式通过 query 传给渲染层；窗口尺寸按原版 tip/alert 素材 290×187
+function openAlert(payload) {
+  const { text = '', mode = 'alert', id = '' } = payload || {}
+  const search = `mode=${encodeURIComponent(mode)}&id=${encodeURIComponent(id)}&text=${encodeURIComponent(text)}`
+  const exist = auxWindows.get('alert')
+  if (exist && !exist.isDestroyed()) {
+    auxWindows.delete('alert') // 先摘掉引用，避免旧窗口的 closed 回调把新窗口从表里删掉
+    exist.destroy()
+  }
+  return createAuxWindow('alert', { file: 'alert.html', search, width: 290, height: 187, modal: true })
+}
+
+// 桌面提醒（iconList/DeskNotice）：288×136，公告式小窗，同一时间只保留一个
+function openNotice(payload) {
+  const { text = '' } = payload || {}
+  const search = `text=${encodeURIComponent(text)}`
+  const exist = auxWindows.get('notice')
+  if (exist && !exist.isDestroyed()) {
+    auxWindows.delete('notice')
+    exist.destroy()
+  }
+  return createAuxWindow('notice', { file: 'notice.html', search, width: 288, height: 136 })
+}
+
+// AI 聊天窗口：420×540，独立于中心窗口，可边聊边看宠物反应
+function openChat() {
+  return createAuxWindow('chat', { file: 'chat.html', width: 420, height: 540 })
+}
+
+// 解析 SWF 文件头，计算总播放时长（毫秒）。// SWF 头：签名(3) + 版本(1) + 文件长(4) + RECT + frameRate(UI16,8.8定点) + frameCount(UI16)。
 // FWS 直接解析；CWS(zlib) 需解压后再读 RECT；ZWS(LZMA) 无内置解压，返回 null。
 // 解析失败返回 null，由调用方回退写死时长。
 function getSwfDuration(buf) {
@@ -142,7 +225,7 @@ function getSwfDuration(buf) {
 
     if (!frameRate || !frameCount) return null
     return Math.round((frameCount / frameRate) * 1000)
-  } catch (_) {
+  } catch {
     return null
   }
 }
@@ -215,7 +298,7 @@ ipcMain.handle('list-files', (_e, rel, ext) => {
   let files = []
   try {
     files = readdirSync(dir)
-  } catch (_) {
+  } catch {
     return []
   }
   if (ext) files = files.filter((f) => f.toLowerCase().endsWith(`.${String(ext).toLowerCase()}`))
@@ -225,6 +308,11 @@ ipcMain.handle('list-files', (_e, rel, ext) => {
 // IPC：控制栏点击 → 转发给宠物窗口渲染层 dispatch
 ipcMain.on('control-action', (_e, action) => {
   mainWindow?.webContents.send('pet-action', action)
+})
+
+// IPC：AI 回复的台词与动作 → 宠物窗口（气泡 + 动作动画）
+ipcMain.on('ai-say', (_e, payload) => {
+  mainWindow?.webContents.send('pet-action', { type: 'ai-say', ...(payload || {}) })
 })
 
 // IPC：商店等窗口发来的反馈气泡 → 宠物窗口气泡播报（不切动画）
@@ -237,6 +325,49 @@ ipcMain.on('open-shop', () => createCenterWindow('shop'))
 ipcMain.on('open-game', () => createCenterWindow('game'))
 ipcMain.on('open-info', () => createCenterWindow('info'))
 ipcMain.on('open-bag', () => createCenterWindow('bag'))
+ipcMain.on('open-work', () => createCenterWindow('work'))
+ipcMain.on('open-study', () => createCenterWindow('study'))
+ipcMain.on('open-task', () => createCenterWindow('task'))
+ipcMain.on('open-friend', () => createCenterWindow('friend'))
+ipcMain.on('open-settings', () => openSettings())
+ipcMain.on('open-help', () => openHelp())
+ipcMain.on('open-confirm', () => openConfirm())
+ipcMain.on('open-alert', (_e, payload) => openAlert(payload))
+ipcMain.on('open-notice', (_e, payload) => openNotice(payload))
+ipcMain.on('open-chat', () => openChat())
+
+// —— AI 对话（主进程发请求，避开渲染层 CORS）——
+// 配置（baseUrl / apiKey / model）由渲染层从 localStorage 读出后随请求传上来，
+// 主进程不落盘，避免密钥被别的地方读到。
+ipcMain.handle('ai-chat', (_e, payload) => aiChat(payload || {}))
+ipcMain.handle('ai-test', (_e, payload) => aiTest(payload || {}))
+ipcMain.handle('ai-defaults', () => AI_DEFAULTS)
+
+// —— 聊天记录与记忆（JSONL 落盘，主进程唯一写入口）——
+// 聊天窗、宠物窗口都通过这几个通道读写同一份文件，避免多窗口 localStorage 互覆盖。
+ipcMain.handle('mem-append', (_e, rec) => memory.append(rec || {}))
+ipcMain.handle('mem-context', (_e, limit) => memory.context(limit))
+ipcMain.handle('mem-history', (_e, opts) => memory.history(opts || {}))
+ipcMain.handle('mem-clear', (_e, scope) => memory.clear(scope))
+ipcMain.handle('mem-profile', () => memory.readProfile())
+ipcMain.handle('mem-forget', (_e, text) => memory.forgetFact(text))
+ipcMain.handle('mem-compact', (_e, cfg) => memory.maybeCompact(cfg || {}))
+ipcMain.handle('mem-stats', () => memory.stats())
+ipcMain.handle('mem-open-dir', () => dataDir.open())
+ipcMain.handle('mem-export', (e, meta) =>
+  memory.exportAs(BrowserWindow.fromWebContents(e.sender), meta || {})
+)
+
+// —— 数据存储目录（默认 exe 同级 qqpetdata，可在设置里改）——
+ipcMain.handle('datadir-info', () => dataDir.info())
+ipcMain.handle('datadir-pick', (e) => dataDir.pick(BrowserWindow.fromWebContents(e.sender)))
+ipcMain.handle('datadir-set', (_e, dir) => dataDir.set(dir))
+ipcMain.handle('datadir-reset', () => dataDir.reset())
+ipcMain.handle('datadir-open', () => dataDir.open())
+// 提示框按钮结果 → 回传给发起请求的窗口（目前只有中心窗口用它做购买确认）
+ipcMain.on('alert-result', (_e, res) => {
+  centerWindow?.webContents.send('alert-result', res)
+})
 // 元宝/背包数据变更：广播给所有数据展示窗口，替代跨窗口轮询
 ipcMain.on('storage-changed', () => {
   const wins = [mainWindow, centerWindow].filter(Boolean)
@@ -248,8 +379,8 @@ let petSelectWindow = null
 function createPetSelectWindow() {
   if (petSelectWindow && !petSelectWindow.isDestroyed()) { petSelectWindow.focus(); return }
   petSelectWindow = new BrowserWindow({
-    width: 480,
-    height: 430,
+    width: 340,
+    height: 213,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -295,10 +426,23 @@ ipcMain.on('context-menu-action', (_e, action) => {
     applyAlwaysOnTop(!windowPrefs.alwaysOnTop)
   } else if (action === 'toggle-mouse-through') {
     applyMouseThrough(!windowPrefs.mouseThrough)
+  } else if (action === 'settings') {
+    openSettings()
+    menuWindow?.close()
+  } else if (action === 'help') {
+    openHelp()
+    menuWindow?.close()
   } else {
     mainWindow?.webContents.send('pet-action', action)
     menuWindow?.close()
   }
+})
+
+// 设置窗口保存：直接按目标值应用窗口属性（不是切换）
+ipcMain.on('set-window-prefs', (_e, p) => {
+  if (!p) return
+  applyAlwaysOnTop(!!p.alwaysOnTop)
+  applyMouseThrough(!!p.mouseThrough)
 })
 
 // IPC：渲染层播完 Hide 动画后隐藏窗口
@@ -326,7 +470,7 @@ ipcMain.on('set-tray-gender', (_e, gender) => {
   if (tray && lastTrayIcon) {
     try {
       tray.setImage(nativeImage.createFromPath(resourcePath(join('assets', 'img_res', 'Tray', TRAY_GENDER, lastTrayIcon, '1.ico'))))
-    } catch (_) { /* 图标缺失时保持当前 */ }
+    } catch { /* 图标缺失时保持当前 */ }
   }
 })
 
@@ -338,7 +482,7 @@ ipcMain.on('set-tray-tooltip', (_e, status) => {
     try {
       const ico = resourcePath(join('assets', 'img_res', 'Tray', TRAY_GENDER, key, '1.ico'))
       tray.setImage(nativeImage.createFromPath(ico))
-    } catch (_) { /* 图标缺失时保持当前 */ }
+    } catch { /* 图标缺失时保持当前 */ }
   }
   tray?.setToolTip(text)
 })
@@ -367,8 +511,8 @@ ipcMain.on('hide-to-edge', (_e, edge, height) => {
 function createMenuWindow() {
   if (menuWindow && !menuWindow.isDestroyed()) { menuWindow.focus(); return }
 
-  const W = 154
-  const H = 590
+  const W = 156
+  const H = 500
   const pos = screen.getCursorScreenPoint()
   const dis = screen.getDisplayNearestPoint(pos).workArea
   // 菜单位置：默认在鼠标右下方，超出屏幕时收回到工作区内
@@ -427,13 +571,13 @@ function loadWindowPrefs() {
     const raw = readFileSync(join(app.getPath('userData'), PREFS_FILE), 'utf-8')
     const p = JSON.parse(raw)
     return { alwaysOnTop: !!p.alwaysOnTop, mouseThrough: !!p.mouseThrough }
-  } catch (_) {
+  } catch {
     return { alwaysOnTop: false, mouseThrough: false }
   }
 }
 function saveWindowPrefs(partial) {
   windowPrefs = { ...windowPrefs, ...partial }
-  try { writeFileSync(join(app.getPath('userData'), PREFS_FILE), JSON.stringify(windowPrefs), 'utf-8') } catch (_) {}
+  try { writeFileSync(join(app.getPath('userData'), PREFS_FILE), JSON.stringify(windowPrefs), 'utf-8') } catch { /* 写盘失败不阻断 UI */ }
 }
 
 // 刷新托盘菜单两个勾选项（右键菜单/托盘切换后保持勾选态一致）
@@ -499,6 +643,15 @@ function createTray() {
       checked: windowPrefs.mouseThrough,
       // 开启后窗口不拦截鼠标交互（点击穿透到下方程序）；保留 forward 让动画区域仍能收到鼠标移动
       click: (menuItem) => applyMouseThrough(menuItem.checked)
+    },
+    { type: 'separator' },
+    {
+      label: '系统设置',
+      click: () => openSettings()
+    },
+    {
+      label: '帮助',
+      click: () => openHelp()
     },
     { type: 'separator' },
     {
@@ -577,6 +730,11 @@ ipcMain.on('login-cancel', () => app.quit())
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
+
+  // 数据目录：先确认可用（不可写会自动回退），再清理过期聊天记录
+  const dirState = dataDir.init()
+  if (dirState.fallback) console.warn('[dataDir]', dirState.reason, '→', dirState.dir)
+  memory.pruneOld()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

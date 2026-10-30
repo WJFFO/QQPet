@@ -13,7 +13,13 @@ export default defineConfig({
           login: resolve('src/renderer/login.html'),
           center: resolve('src/renderer/center.html'),
           menu: resolve('src/renderer/menu.html'),
-          petselect: resolve('src/renderer/petselect.html')
+          petselect: resolve('src/renderer/petselect.html'),
+          settings: resolve('src/renderer/settings.html'),
+          help: resolve('src/renderer/help.html'),
+          confirm: resolve('src/renderer/confirm.html'),
+          alert: resolve('src/renderer/alert.html'),
+          notice: resolve('src/renderer/notice.html'),
+          chat: resolve('src/renderer/chat.html')
         }
       }
     },

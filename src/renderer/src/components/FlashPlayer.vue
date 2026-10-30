@@ -1,15 +1,17 @@
 <template>
-  <div ref="container" class="flash-player-container"></div>
+  <div ref="container" class="flash-player-container" :data-swf="src"></div>
 </template>
 
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 
 const emit = defineEmits(['loaded'])
 
 const props = defineProps({
-  src: { type: String, required: true }
+  src: { type: String, required: true },
+  // 0–1，来自系统设置里的音量（Ruffle 支持 player.volume）
+  volume: { type: Number, default: 1 }
 })
 
 const container = ref(null)
@@ -38,6 +40,11 @@ onMounted(async () => {
   player.style.width = '100%'
   player.style.height = '100%'
   player.style.background = 'transparent'
+  try {
+    player.volume = props.volume
+  } catch {
+    /* 旧版 Ruffle 无 volume 属性时忽略 */
+  }
   container.value.appendChild(player)
 
   // 每次切换动画都会重建播放器：从新建 Ruffle 播放器到首帧渲染之间有一段空白期
@@ -74,6 +81,20 @@ onMounted(async () => {
 })
 
 let disposed = false // 组件卸载标志：异步读取期间避免操作已销毁的播放器
+
+// 设置窗口改音量后立即生效（不用重建播放器）
+watch(
+  () => props.volume,
+  (v) => {
+    if (!player) return
+    try {
+      player.volume = v
+    } catch {
+      /* 忽略 */
+    }
+  }
+)
+
 onBeforeUnmount(() => {
   disposed = true
   if (objectUrl) {
@@ -85,7 +106,7 @@ onBeforeUnmount(() => {
     // 必须继续执行 remove() 否则元素残留导致 Canvas/实例混乱
     try {
       if (typeof player.destroy === 'function') player.destroy()
-    } catch (_) {
+    } catch {
       /* 忽略 destroy 异常 */
     }
     player.remove()

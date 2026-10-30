@@ -61,6 +61,66 @@ const api = {
   openGame: () => ipcRenderer.send('open-game'),
   openInfo: () => ipcRenderer.send('open-info'),
   openBag: () => ipcRenderer.send('open-bag'),
+  openWork: () => ipcRenderer.send('open-work'),
+  openStudy: () => ipcRenderer.send('open-study'),
+  openTask: () => ipcRenderer.send('open-task'),
+  openFriend: () => ipcRenderer.send('open-friend'),
+  // 系统设置 / 帮助 / 退出确认 三个辅助小窗
+  openSettings: () => ipcRenderer.send('open-settings'),
+  openHelp: () => ipcRenderer.send('open-help'),
+  openConfirm: () => ipcRenderer.send('open-confirm'),
+  // 通用提示框（tip/alert）：mode='alert' 只有一个确定，'confirm' 有确定+取消
+  openAlert: (payload) => ipcRenderer.send('open-alert', payload),
+  // 桌面提醒（公告）小窗：宠物窗口在饥饿/生病/奖励可领时调用
+  openNotice: (payload) => ipcRenderer.send('open-notice', payload),
+  // 打开 AI 聊天窗（右键菜单「和宝贝聊天」）
+  openChat: () => ipcRenderer.send('open-chat'),
+  // AI 对话：{ baseUrl, apiKey, model, messages } → { ok, parsed:{reply,emotion,action,mood}, ... }
+  aiChat: (payload) => ipcRenderer.invoke('ai-chat', payload),
+  // AI 设置页「测试连接」
+  aiTest: (payload) => ipcRenderer.invoke('ai-test', payload),
+  aiDefaults: () => ipcRenderer.invoke('ai-defaults'),
+  // AI 台词 + 动作交给宠物窗口执行（气泡播报并在空闲时播动作动画）
+  aiSay: (payload) => ipcRenderer.send('ai-say', payload),
+  // —— 聊天记录与记忆（JSONL 落盘，读写都走主进程）——
+  // 追加一条：{ role:'user'|'pet', text, src:'chat'|'auto', emotion?, action? }
+  memAppend: (rec) => ipcRenderer.invoke('mem-append', rec),
+  // 组装上下文：{ history:[{role,content}], summary, impression, facts, factCount }
+  memContext: (limit) => ipcRenderer.invoke('mem-context', limit),
+  // 按天分组的历史（聊天窗回填）
+  memHistory: (opts) => ipcRenderer.invoke('mem-history', opts),
+  // 清空：'today' 只清今天的聊天，'all' 连长期记忆一起清
+  memClear: (scope) => ipcRenderer.invoke('mem-clear', scope),
+  memProfile: () => ipcRenderer.invoke('mem-profile'),
+  memForget: (text) => ipcRenderer.invoke('mem-forget', text),
+  // 攒够条数后压缩 L0 → L1/L2（异步、失败静默，不要 await 在发送链路上）
+  memCompact: (cfg) => ipcRenderer.invoke('mem-compact', cfg),
+  memStats: () => ipcRenderer.invoke('mem-stats'),
+  memOpenDir: () => ipcRenderer.invoke('mem-open-dir'),
+  memExport: (meta) => ipcRenderer.invoke('mem-export', meta),
+  // 数据存储目录：默认 exe 同级 qqpetdata，可改；改动时旧数据会自动补过去
+  dataDirInfo: () => ipcRenderer.invoke('datadir-info'),
+  dataDirPick: () => ipcRenderer.invoke('datadir-pick'),
+  dataDirSet: (dir) => ipcRenderer.invoke('datadir-set', dir),
+  dataDirReset: () => ipcRenderer.invoke('datadir-reset'),
+  dataDirOpen: () => ipcRenderer.invoke('datadir-open'),
+  // 提示框的按钮结果回传（id 用于匹配发起方的请求）
+  alertResult: (res) => ipcRenderer.send('alert-result', res),
+  onAlertResult: (cb) => {
+    ipcRenderer.removeAllListeners('alert-result')
+    const listener = (_e, res) => cb(res)
+    ipcRenderer.on('alert-result', listener)
+    return () => ipcRenderer.removeAllListeners('alert-result')
+  },
+  // 按目标值设置窗口属性（设置窗口用，区别于菜单的"切换"）
+  setWindowPrefs: (prefs) => ipcRenderer.send('set-window-prefs', prefs),
+  // 中心窗口已打开时，主进程发来的"切到指定页签"通知（菜单点商店/打工等直接切页）
+  onCenterTab: (cb) => {
+    ipcRenderer.removeAllListeners('center-tab')
+    const listener = (_e, tab) => cb(tab)
+    ipcRenderer.on('center-tab', listener)
+    return () => ipcRenderer.removeAllListeners('center-tab')
+  },
   // 读取宠物窗口置顶/穿透状态（右键菜单渲染勾选标记用）
   getWindowPrefs: async () => await ipcRenderer.invoke('get-window-prefs'),
   // 订阅置顶/穿透状态变化（右键菜单打开期间从托盘/菜单切换后实时刷新勾选态）
