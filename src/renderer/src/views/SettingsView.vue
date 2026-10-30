@@ -98,6 +98,8 @@
           </select>
           <button class="mini-b" @click="openPersona">编辑</button>
         </div>
+        <!-- 把真正会发给模型的人设摊开显示：存的是空串时会回落默认，这里能一眼看出 -->
+        <div class="hint pe-now">当前生效：{{ activePersonaBrief }}</div>
         <div class="fld">
           <QCheck v-model="ai.autoTalk" label="主动搭话" />
           <input
@@ -211,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import QCheck from '../ui/QCheck.vue'
 import QSlider from '../ui/QSlider.vue'
 import { asset } from '../ui/useSkin'
@@ -219,6 +221,7 @@ import {
   readAiConfig,
   saveAiConfig,
   matchPersona,
+  personaText,
   PERSONA_PRESETS,
   PERSONA_DEFAULT
 } from '../composables/aiConfig'
@@ -305,10 +308,16 @@ const personaKey = ref(matchPersona(ai.value.persona).key)
 const personaOpen = ref(false)
 const personaDraft = ref('')
 
+// 真正会发给模型的人设（空串会回落到默认人设），摊在设置页上让用户一眼看到实际生效的那份
+const activePersonaBrief = computed(() => {
+  const t = personaText(ai.value.persona).trim()
+  return t.length > 46 ? `${t.slice(0, 46)}…` : t
+})
+
 function onPersonaChange(e) {
   const key = e.target.value
   if (key === 'custom') {
-    personaDraft.value = ai.value.persona
+    personaDraft.value = ai.value.persona || PERSONA_DEFAULT
     personaOpen.value = true
     return
   }
@@ -334,12 +343,13 @@ function closePersona() {
 
 function savePersona() {
   const text = personaDraft.value.trim()
-  ai.value.persona = text
-  personaKey.value = matchPersona(text).key
+  // 清空保存 = 想用默认人设。落盘默认值而不是空串，避免存储里留着空导致「看着没生效」
+  ai.value.persona = text || PERSONA_DEFAULT
+  personaKey.value = matchPersona(ai.value.persona).key
   personaOpen.value = false
   const err = persistAi()
   aiTestBad.value = !!err
-  aiTestMsg.value = err || '人设已保存'
+  aiTestMsg.value = err || (text ? '人设已保存' : '内容为空，已恢复默认人设')
 }
 
 async function testAi() {
@@ -1257,6 +1267,16 @@ body,
   font-size: 11px;
   line-height: 1.7;
   color: #9b7f52;
+}
+/* 人设「当前生效」提示：紧贴下拉框，不画分隔线 */
+.pe-now {
+  margin: -1px 0 5px 46px;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #7c8fa6;
+  word-break: break-all;
 }
 
 /* 数据目录：标题与路径同行（路径过长省略，悬停看完整），下面一排小按钮 */

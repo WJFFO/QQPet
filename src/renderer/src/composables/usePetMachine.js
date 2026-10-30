@@ -1009,8 +1009,8 @@ function createPetMachine() {
           {
             role: 'system',
             content: [
-              `你是桌面宠物「${petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。`,
-              `性格设定：${personaText(cfg.persona)}`,
+              `【人设·最高优先级】${personaText(cfg.persona)}`,
+              `你是桌面宠物「${petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。说话要贴合上面的人设。`,
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。` : '',
               '主人这会儿没在跟你说话，你要主动开口，说话要符合上面的性格。',
               '只输出一个 JSON：{"reply":"一句话","emotion":"情绪"}，不要 action 字段，不要代码块和任何解释。',

@@ -211,8 +211,9 @@ function systemPrompt() {
   const s = petState()
   const persona = personaText(cfg.value.persona)
   return [
-    `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。`,
-    `性格设定：${persona}`,
+    // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
+    `【人设·最高优先级】${persona}`,
+    `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。说话的语气、口头禅、称呼都要贴合上面的人设。`,
     `当前状态：等级 ${s.level}，饱食 ${s.hunger}/100，清洁 ${s.clean}/100，健康 ${s.health}/100，心情 ${s.mood}/1000，元宝 ${s.coins}。`,
     '保持这个人设说话，不要因为一轮对话就跳出角色。状态不好（饿/脏/病/心情低）时要自然地在台词里流露出来。',
     '回复要求：像宠物说话，口语短句，20~50 字以内，不要用 Markdown、不要列表、不要括号动作描写。',
@@ -390,6 +391,9 @@ async function onChatUpdated() {
 onMounted(async () => {
   off = window.api.onStorageChanged?.(() => {
     cfg.value = readCfg()
+    // 设置页改完人设/模型后给个可见反馈，不用再猜「到底生效没有」
+    tokenInfo = `${modelLabel.value} · 累计 ${fmtTokens(tokenTotal.value)} tokens`
+    showStatus('配置已更新，下一句就用新人设', 2200)
   })
   offChat = window.api.onChatUpdated?.(onChatUpdated)
   window.addEventListener('beforeunload', () => {
