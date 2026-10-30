@@ -80,7 +80,7 @@ async function randomBubble(category) {
 
 function createPetMachine() {
   // 【临时】测试用：每次启动清空进度，方便重复体验升级/进化。测完删除本行。
-  localStorage.clear()
+   // localStorage.clear()
 
   // 成长值是原版决定等级的唯一因素，等级由累计成长值查表得出（原版没有「经验」这个指标）。
   const TOTAL_KEY = 'qqpet.totalExp'
