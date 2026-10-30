@@ -1066,7 +1066,7 @@ function createPetMachine() {
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。记忆只提供事实，语气按人设来。` : '',
               SELF_REF_RULE,
               actsText
-                ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了。别再喊饿、喊脏、说生病或者抱怨没人管你，那些事已经被解决。`
+                ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了。别再喊饿、喊脏、喊痒、说生病或者抱怨没人管你，那些事已经被解决。`
                 : '',
               '主人这会儿没在跟你说话，你要主动开口，说话要符合上面的性格。',
               '不要模仿历史对话里的口头禅和句式，语气一律以人设为准。',
@@ -1332,15 +1332,24 @@ function createPetMachine() {
       }
       play(consumeEffect, { user: true })
       const v = Number(item.value) || (consumeEffect === 'cure' ? 20 : 100)
+      // 结算前记一下原值：清洁是直接洗满的，气泡里的「+N」得按实际增量算
+      const beforeStat =
+        consumeEffect === 'eat' ? hunger.value : consumeEffect === 'clean' ? clean.value : health.value
       if (consumeEffect === 'eat') { hunger.value = Math.min(STAT_MAX.hunger, hunger.value + v); addMood(MOOD_GAIN.feed); addGrowth(8); addDailyProgress('feed') }
-      else if (consumeEffect === 'clean') { clean.value = Math.min(STAT_MAX.clean, clean.value + v); addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
+      // 洗澡一次洗透：原来按物品 value 累加，香皂 +144 从 200 只到 344/720，
+      // 档位仍是「好痒啊」，宠物会照实回一句“还有点痒”——洗了跟没洗一样。
+      // 现在直接洗满，「干干净净」档位（≥518）稳稳达到。
+      else if (consumeEffect === 'clean') { clean.value = STAT_MAX.clean; addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
       else if (consumeEffect === 'cure') { health.value = Math.min(STAT_MAX.health, health.value + v); addGrowth(6) }
       // 记一笔给 AI：数值变了模型能读到，但它不知道「是主人刚做的」，
       // 于是喂完照样喊饿。动作本身也要进上下文。
       recordAct(consumeEffect, item.name)
       persistLevel()
       window.api?.storageChanged?.() // 广播：聊天窗/中心窗立即拿到新状态
-      sayUntil(`使用了${item.name}，${consumeEffect === 'eat' ? '饱食' : consumeEffect === 'clean' ? '清洁' : '健康'} +${v}！`, 2600)
+      const afterStat =
+        consumeEffect === 'eat' ? hunger.value : consumeEffect === 'clean' ? clean.value : health.value
+      const gained = Math.max(0, Math.round(afterStat - beforeStat))
+      sayUntil(`使用了${item.name}，${consumeEffect === 'eat' ? '饱食' : consumeEffect === 'clean' ? '清洁' : '健康'} +${gained}！`, 2600)
       return
     }
     else if (action === 'sick') {  play(action, { user: true }); addGrowth(4) }
