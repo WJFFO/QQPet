@@ -22,6 +22,7 @@ import {
 import { levelFromTotal, levelBaseExp, expToNext, onlineGrowRate, MAX_LEVEL } from './levels'
 import {
   MAX as STAT_MAX,
+  CLEAN_PER_ITEM,
   SICK_AT,
   clamp as statClamp,
   migrateStat,
@@ -613,6 +614,7 @@ function createPetMachine() {
     window.api?.storageChanged?.()
     // 开始打工只弹气泡提示，不切换动画；打工期间自动状态循环照常进行
     sayUntil(`开始${job?.name || '打工'}，${minutes} 分钟后领取 ${minutes * workRate} 元宝～`, 2600)
+    recordAct('work')
   }
 
   // 打工人已经干出来的工钱：按干满的整分钟折算，和打工页「已赚」口径完全一致。
@@ -662,6 +664,7 @@ function createPetMachine() {
     studyScholarship = Number(course?.scholar) || 0
     localStorage.setItem('qqpet.lastCourse', JSON.stringify({ id: course?.id || '', name: course?.name || '课程' }))
     sayUntil(`开始上「${course?.name || '课程'}」～`, 2200)
+    recordAct('study')
     playActivity('study')
   }
 
@@ -1066,8 +1069,10 @@ function createPetMachine() {
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。记忆只提供事实，语气按人设来。` : '',
               SELF_REF_RULE,
               actsText
-                ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了。别再喊饿、喊脏、喊痒、说生病或者抱怨没人管你，那些事已经被解决。`
+                ? `【刚才发生的事】\n${actsText}\n这些都已经发生过了。别再喊饿、说生病或者抱怨没人管你；清洁度按上面给的档位说，没洗干净可以撒娇求再洗一次。`
                 : '',
+              // 能力边界：只提游戏里真能做到的事
+              '你能和主人互动的只有：喂食、洗澡、喂药、陪你玩、打工、上课、小游戏、聊天。想提要求时只能提这几件事，不要提做不到的。',
               '主人这会儿没在跟你说话，你要主动开口，说话要符合上面的性格。',
               '不要模仿历史对话里的口头禅和句式，语气一律以人设为准。',
               '只输出一个 JSON：{"reply":"一句话","emotion":"情绪"}，不要 action 字段，不要代码块和任何解释。',
@@ -1331,15 +1336,17 @@ function createPetMachine() {
         return
       }
       play(consumeEffect, { user: true })
-      const v = Number(item.value) || (consumeEffect === 'cure' ? 20 : 100)
-      // 结算前记一下原值：清洁是直接洗满的，气泡里的「+N」得按实际增量算
+      // 清洁按原版统一 +180，不看物品存档里的旧 value（老背包可能是 144/274）
+      const v = consumeEffect === 'clean'
+        ? CLEAN_PER_ITEM
+        : (Number(item.value) || (consumeEffect === 'cure' ? 20 : 100))
+      // 结算前记一下原值：气泡里的「+N」按实际涨幅算（接近上限时会小于物品面值）
       const beforeStat =
         consumeEffect === 'eat' ? hunger.value : consumeEffect === 'clean' ? clean.value : health.value
       if (consumeEffect === 'eat') { hunger.value = Math.min(STAT_MAX.hunger, hunger.value + v); addMood(MOOD_GAIN.feed); addGrowth(8); addDailyProgress('feed') }
-      // 洗澡一次洗透：原来按物品 value 累加，香皂 +144 从 200 只到 344/720，
-      // 档位仍是「好痒啊」，宠物会照实回一句“还有点痒”——洗了跟没洗一样。
-      // 现在直接洗满，「干干净净」档位（≥518）稳稳达到。
-      else if (consumeEffect === 'clean') { clean.value = STAT_MAX.clean; addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
+      // 洗澡按原版换算：日用品 +180，上限 720 —— 一次只洗四分之一，
+      // 想洗干净得多洗几次。这里不再直接洗满（那是上一版为了压住"还痒"做的偏离）。
+      else if (consumeEffect === 'clean') { clean.value = Math.min(STAT_MAX.clean, clean.value + v); addMood(MOOD_GAIN.clean); addGrowth(5); addDailyProgress('wash') }
       else if (consumeEffect === 'cure') { health.value = Math.min(STAT_MAX.health, health.value + v); addGrowth(6) }
       // 记一笔给 AI：数值变了模型能读到，但它不知道「是主人刚做的」，
       // 于是喂完照样喊饿。动作本身也要进上下文。
@@ -1365,8 +1372,11 @@ function createPetMachine() {
     else if (action === 'work' || action === 'work1h') { playWork(60) } // 打工1小时：每分钟按岗位结算元宝，饥饿/清洁加速消耗
     else if (action === 'work15m') { playWork(3)  }                  // 打工15分钟（短班）
     else if (action === 'study') { playStudy() }                  // 学习：帧动画 + 计时加成长值
-    else if (action === 'interact') { playRandomInteract(); addMood(moodClickGain(moodVal.value)) }      // 点击互动：随机播 interact 动画 + 按档位加心情
-    else if (action === 'play') { playRandomPlay(); addMood(MOOD_GAIN.play); addGrowth(4) }  // 玩耍：随机播 play 动画，心情 +20
+    // 点击互动：随机播 interact 动画 + 按档位加心情。
+    // 记一笔给 AI（3 分钟内只记一次，狂点不会把喂食/治病的记录挤掉）
+    else if (action === 'interact') { playRandomInteract(); addMood(moodClickGain(moodVal.value)); recordAct('interact', '', 3 * 60 * 1000) }
+    // 玩耍：随机播 play 动画，心情 +20（同样节流 1 分钟）
+    else if (action === 'play') { playRandomPlay(); addMood(MOOD_GAIN.play); addGrowth(4); recordAct('play', '', 60 * 1000) }
     else if (action === 'stand') { backToStand() }
   }
 

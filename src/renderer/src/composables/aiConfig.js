@@ -208,16 +208,23 @@ const ACT_FRESH_MS = 30 * 60 * 1000 // 只把半小时内发生的算「刚才�
 
 const ACT_TEXT = {
   eat: (d) => `主人刚喂我吃了${d}，我已经吃饱了`,
-  clean: (d) => `主人刚用${d}给我洗了澡，现在干干净净，一点都不痒了`,
+  // 一次洗澡按原版只洗一部分（+180 / 上限 720），所以这里只说「洗了」，
+  // 不再断言「一点都不痒」——有没有洗干净由当前清洁档位决定
+  clean: (d) => `主人刚用${d}给我洗了澡`,
   cure: (d) => `主人刚给我吃了${d}，病已经好了`,
   play: () => '主人刚陪我玩了一会儿',
-  work: () => '我刚打完一份工',
-  study: () => '我刚下课',
+  interact: () => '主人刚摸了摸我、逗了我一下',
+  work: () => '主人刚安排我去打工了',
+  study: () => '主人刚安排我去上课了',
   sleep: () => '我刚睡了一觉'
 }
 
-/** 记一条照顾动作。kind 见 ACT_TEXT，detail 一般是物品名。 */
-export function recordAct(kind, detail) {
+/**
+ * 记一条照顾动作。kind 见 ACT_TEXT，detail 一般是物品名。
+ * minGapMs > 0 时，同类动作在这个间隔内只记一次——点击互动、玩耍这类
+ * 高频操作如果不节流，会把喂食/治病这些关键记录挤出队列。
+ */
+export function recordAct(kind, detail, minGapMs = 0) {
   if (!ACT_TEXT[kind]) return
   let list = []
   try {
@@ -225,6 +232,10 @@ export function recordAct(kind, detail) {
     if (Array.isArray(raw)) list = raw
   } catch {
     list = []
+  }
+  if (minGapMs > 0) {
+    const last = [...list].reverse().find((a) => a && a.kind === kind)
+    if (last && Date.now() - Number(last.at || 0) < minGapMs) return
   }
   list.push({ kind, detail: String(detail || ''), at: Date.now() })
   try {
@@ -244,9 +255,20 @@ export function recentActsText(maxAge = ACT_FRESH_MS) {
     return ''
   }
   const now = Date.now()
-  const rows = list
-    .filter((a) => a && ACT_TEXT[a.kind] && now - Number(a.at || 0) <= maxAge)
-    .map((a) => ACT_TEXT[a.kind](a.detail || '东西'))
-  // 同一件事重复做只提一次，免得模型以为主人喂了八顿
-  return [...new Set(rows)].slice(-4).join('\n')
+  const fresh = list.filter((a) => a && ACT_TEXT[a.kind] && now - Number(a.at || 0) <= maxAge)
+  if (!fresh.length) return ''
+  // 同一件事只提一次（喂了三顿不必说三遍），倒序遍历保持「最近的在前」
+  const seen = new Set()
+  const rows = []
+  for (const a of [...fresh].reverse()) {
+    const text = ACT_TEXT[a.kind](a.detail || '东西')
+    if (seen.has(text)) continue
+    seen.add(text)
+    rows.push({ kind: a.kind, text })
+  }
+  // 吃/洗/治会改变状态、最容易和对话冲突，优先保留；玩耍、点击这类排后面，
+  // 免得点几下宠物就把「刚喂过」挤出上下文
+  const weight = (k) => (k === 'eat' || k === 'clean' || k === 'cure' ? 0 : 1)
+  rows.sort((a, b) => weight(a.kind) - weight(b.kind))
+  return rows.slice(0, 4).map((r) => r.text).join('\n')
 }

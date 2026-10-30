@@ -161,9 +161,9 @@ const ITEMS = [
   { file: '102010006.gif', name: '蹦豆豆卷', price: 60, value: 594, effect: 'eat' },
   { file: '102010005.gif', name: '炸虾盖饭', price: 100, value: 756, effect: 'eat' },
   { file: '102010023.gif', name: '金钢竹筒饭', price: 100, value: 756, effect: 'eat' },
-  { file: '10001.gif', folder: 'medicine', name: '小梳子', price: 18, value: 173, effect: 'clean' },
-  { file: '20001.gif', folder: 'medicine', name: '香皂', price: 15, value: 144, effect: 'clean' },
-  { file: '30001.gif', folder: 'medicine', name: '沐浴露', price: 28, value: 274, effect: 'clean' },
+  { file: '10001.gif', folder: 'medicine', name: '小梳子', price: 20, value: 180, effect: 'clean' },
+  { file: '20001.gif', folder: 'medicine', name: '香皂', price: 20, value: 180, effect: 'clean' },
+  { file: '30001.gif', folder: 'medicine', name: '沐浴露', price: 20, value: 180, effect: 'clean' },
   { file: '40001.gif', folder: 'medicine', name: '创可贴', price: 35, value: 40, effect: 'cure' },
   { file: '50001.gif', folder: 'medicine', name: '感冒药', price: 40, value: 50, effect: 'cure' },
   { file: '60001.gif', folder: 'medicine', name: '康复营养液', price: 60, value: 60, effect: 'cure' }
