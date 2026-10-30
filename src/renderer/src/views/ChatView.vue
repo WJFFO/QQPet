@@ -19,22 +19,26 @@
       <template v-else>
         <div ref="listEl" class="list qq-scroll">
           <template v-for="g in groups" :key="g.day">
-            <div class="day">{{ g.day }}</div>
             <div v-for="m in g.rows" :key="m.key" class="row" :class="m.role">
-              <div class="bubble">
-                <span v-if="m.src === 'auto'" class="auto-tag">主动</span>
-                <div class="txt">{{ m.text }}</div>
-                <div v-if="m.action || m.emotion" class="act">
-                  <span v-if="m.emotion">心情：{{ emotionLabel(m.emotion) }}</span>
-                  <span v-if="m.emotion && m.action" class="sepdot">·</span>
-                  <span v-if="m.action">动作：{{ actionLabel(m.action) }}</span>
+              <div class="msg">
+                <div class="bubble">
+                  <span v-if="m.src === 'auto'" class="auto-tag">主动</span>
+                  <div class="txt">{{ m.text }}</div>
+                  <div v-if="m.action || m.emotion" class="act">
+                    <span v-if="m.emotion">心情：{{ emotionLabel(m.emotion) }}</span>
+                    <span v-if="m.emotion && m.action" class="sepdot">·</span>
+                    <span v-if="m.action">动作：{{ actionLabel(m.action) }}</span>
+                  </div>
+                  <div v-if="m.fail" class="fail">{{ m.fail }}</div>
                 </div>
-                <div v-if="m.fail" class="fail">{{ m.fail }}</div>
+                <div class="tm">{{ fmtDateTime(m.time) }}</div>
               </div>
             </div>
           </template>
           <div v-if="thinking" class="row pet">
-            <div class="bubble typing"><span></span><span></span><span></span></div>
+            <div class="msg">
+              <div class="bubble typing"><span></span><span></span><span></span></div>
+            </div>
           </div>
         </div>
 
@@ -166,6 +170,14 @@ function dayLabel(ts) {
   const y = new Date(t.getTime() - 86400000)
   if (sameDay(d, y)) return '昨天'
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+}
+
+// 每条消息脚下都标日期时间：同年「MM-DD HH:mm」，跨年补全年份
+function fmtDateTime(ts) {
+  const d = new Date(Number(ts) || Date.now())
+  const p = (n) => String(n).padStart(2, '0')
+  const md = `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}-${md}`
 }
 
 const cfg = ref(readCfg())
@@ -454,11 +466,26 @@ onMounted(async () => {
   padding: 4px 6px 6px;
   overflow-y: auto;
 }
-.day {
-  margin: 2px 0 8px;
-  text-align: center;
+/* 一条消息 = 气泡 + 脚下的日期时间 */
+.msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  min-width: 0;
+}
+.row.user .msg {
+  align-items: flex-end;
+}
+.row.pet .msg {
+  align-items: flex-start;
+}
+.tm {
+  margin-top: 2px;
+  padding: 0 2px;
   font-size: 10px;
+  line-height: 1.2;
   color: #8aa4bf;
+  user-select: none;
 }
 /* 宠物自己主动开口说的话，跟主人提问区分开 */
 .auto-tag {
@@ -480,7 +507,7 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 .bubble {
-  max-width: 78%;
+  max-width: 100%;
   padding: 6px 9px;
   border-radius: 8px;
   font-size: 12px;
