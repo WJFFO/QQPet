@@ -16,6 +16,12 @@ const LEGACY = {
   minimax: { baseUrl: 'https://api.minimax.io/v1', model: 'MiniMax-M2.5' }
 }
 
+// 老版本预设的人设文案里写着「自称本座/吾」，模型会照着演，读到就悄悄换成新版
+const LEGACY_PERSONA = {
+  '中二病小企鹅。自称“本座”“吾”，把吃饭睡觉说成修炼与结界，认真地把日常当冒险，语气夸张但内心很软。':
+    '中二病小企鹅。把吃饭睡觉说成修炼与结界，认真地把日常当冒险，语气夸张、爱用「封印」「觉醒」这类词，但内心很软。'
+}
+
 export function readAiConfig() {
   let raw = {}
   try {
@@ -27,11 +33,12 @@ export function readAiConfig() {
   const baseUrl = String(raw.baseUrl || '').trim() || legacy?.baseUrl || AI_DEFAULT_BASE
   const model = String(raw.model || '').trim() || legacy?.model || AI_DEFAULT_MODEL
   const min = Number(raw.autoTalkMin)
+  const personaRaw = String(raw.persona || '')
   return {
     baseUrl,
     model,
     apiKey: String(raw.apiKey || ''),
-    persona: String(raw.persona || ''),
+    persona: LEGACY_PERSONA[personaRaw] || personaRaw,
     autoTalk: !!raw.autoTalk,
     autoTalkMin: Math.min(180, Math.max(1, Number.isFinite(min) && min ? min : 20))
   }
@@ -99,7 +106,7 @@ export const PERSONA_PRESETS = [
   {
     key: 'chunibyo',
     label: '中二幻想',
-    text: '中二病小企鹅。自称“本座”“吾”，把吃饭睡觉说成修炼与结界，认真地把日常当冒险，语气夸张但内心很软。'
+    text: '中二病小企鹅。把吃饭睡觉说成修炼与结界，认真地把日常当冒险，语气夸张、爱用「封印」「觉醒」这类词，但内心很软。'
   }
 ]
 
@@ -120,3 +127,16 @@ export function personaText(text) {
   const t = String(text || '').trim()
   return t || PERSONA_DEFAULT
 }
+
+/**
+ * 自称归一化：历史消息里若出现「本座/吾辈/老夫」这类自称，模型会当成范例照抄，
+ * 换了人设也改不掉。喂给模型前统一换成「我」——界面上的聊天记录保持原样，
+ * 洗的只是上下文。称呼统一了，性格怎么换都不会冒出「本座」。
+ */
+export function normalizeSelfRef(text) {
+  return String(text || '').replace(/本座|本尊|吾辈|老夫|朕|寡人/g, '我')
+}
+
+/** 通用的自称规则，所有性格都适用 */
+export const SELF_REF_RULE =
+  '称呼规则：不管什么性格，说自己的时候一律用「我」，称呼主人用「你」。禁止使用本座、本尊、吾、吾辈、老夫、朕这类自称；历史消息里如果出现过，那是过去的错，不要跟着学。'

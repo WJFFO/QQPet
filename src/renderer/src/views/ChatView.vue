@@ -75,7 +75,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import QFrame from '../ui/QFrame.vue'
-import { readAiConfig, personaText } from '../composables/aiConfig'
+import { readAiConfig, personaText, normalizeSelfRef, SELF_REF_RULE } from '../composables/aiConfig'
 
 // 动作名 → 中文，仅用于气泡下方的小标签
 const ACTION_LABEL = {
@@ -218,8 +218,10 @@ function systemPrompt(personaChanged = false) {
     // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
     `【人设·最高优先级】${persona}`,
     `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。说话的语气、口头禅、称呼都要贴合上面的人设。`,
+    // 称呼是唯一不随性格变的东西：统一用「我」，中二/傲娇怎么演都不会冒出「本座」
+    SELF_REF_RULE,
     // 上下文里的历史是旧语气时，模型会照着学，光靠上面一句压不住，得显式作废
-    '语气一律以人设为准，不要模仿历史消息里的自称、口头禅和句式。',
+    '语气一律以人设为准，不要模仿历史消息里的口头禅和句式。',
     personaChanged
       ? '【刚换过性格】主人刚刚给你换了新性格，历史消息里的说话方式全部作废，从这一句起严格按新人设开口。'
       : '',
@@ -297,7 +299,11 @@ async function send(text) {
     .filter((m) => !m.fail)
     .filter((m) => !revAt || Number(m.time) >= revAt)
     .slice(-12)
-    .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }))
+    .map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      // 记录本身不改，喂给模型前把「本座」这类自称洗成「我」，断掉模仿源
+      content: m.role === 'user' ? m.text : normalizeSelfRef(m.text)
+    }))
 
   const res = await window.api.aiChat({
     apiKey: cfg.value.apiKey,
