@@ -108,6 +108,33 @@ const messages = ref([])
 const draft = ref('')
 const thinking = ref(false)
 const status = ref('')
+// 底部状态栏：模型 + token 消耗。累计值落 localStorage，重开窗口也还在；
+// «记忆已更新» 这类临时提示会自动恢复成 token 信息，不再把它顶掉。
+const TOKEN_KEY = 'qqpet.ai.tokens'
+const tokenTotal = ref(Number(localStorage.getItem(TOKEN_KEY)) || 0)
+let tokenInfo = ''
+let statusTimer = null
+
+function fmtTokens(n) {
+  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+}
+
+function tokenText(model, inTok, outTok) {
+  return `${model} · 本次 ${(inTok || 0) + (outTok || 0)} tokens（入 ${inTok || 0} / 出 ${outTok || 0}）· 累计 ${fmtTokens(tokenTotal.value)}`
+}
+
+function showStatus(text, restoreMs = 0) {
+  status.value = text
+  if (statusTimer) {
+    clearTimeout(statusTimer)
+    statusTimer = null
+  }
+  if (restoreMs > 0) {
+    statusTimer = setTimeout(() => {
+      status.value = tokenInfo
+    }, restoreMs)
+  }
+}
 const listEl = ref(null)
 
 // —— 记忆：L1 摘要 + L2 长期档案拼成一段，塞进 system prompt ——
@@ -177,7 +204,6 @@ function systemPrompt() {
     `当前状态：等级 ${s.level}，饱食 ${s.hunger}/100，清洁 ${s.clean}/100，健康 ${s.health}/100，心情 ${s.mood}/1000，元宝 ${s.coins}。`,
     '保持这个人设说话，不要因为一轮对话就跳出角色。状态不好（饿/脏/病/心情低）时要自然地在台词里流露出来。',
     '回复要求：像宠物说话，口语短句，20~50 字以内，不要用 Markdown、不要列表、不要括号动作描写。',
-    '格式要求：只输出那一个 JSON 对象本身，不要代码块、不要解释、不要在前后加任何字符；reply 必须是单行，不能有换行。',
     '格式要求：只输出那一个 JSON 对象本身，不要代码块、不要解释、不要在前后加任何字符；reply 必须是单行，不能有换行。',
     '你必须只输出一个 JSON 对象，格式：{"reply":"对主人说的话","emotion":"情绪","action":"动作","mood":整数}',
     'emotion 必填，只能从这些里选一个，要和语气一致：',
@@ -254,7 +280,15 @@ async function send(text) {
   }
 
   const parsed = res.parsed || { reply: res.content || '', action: '', emotion: '', mood: 0 }
-  status.value = `${res.model || modelLabel.value} · ${res.usage?.out || 0} tokens`
+  // 累计消耗按 入+出 记，重启窗口后仍能接着算
+  const inTok = res.usage?.in || 0
+  const outTok = res.usage?.out || 0
+  if (inTok + outTok > 0) {
+    tokenTotal.value += inTok + outTok
+    localStorage.setItem(TOKEN_KEY, String(tokenTotal.value))
+  }
+  tokenInfo = tokenText(res.model || modelLabel.value, inTok, outTok)
+  showStatus(tokenInfo)
   push('pet', parsed.reply || '（没说话）', {
     action: parsed.action || '',
     emotion: parsed.emotion || '',
@@ -279,7 +313,8 @@ async function send(text) {
     .then((r) => {
       if (r?.ok && !r.skipped) {
         refreshMemory()
-        status.value = `记忆已更新（+${(r.facts || []).length} 条）`
+        // 只短暂提示，3 秒后底部回到 token 信息
+        showStatus(`记忆已更新（+${(r.facts || []).length} 条）`, 3000)
       }
     })
     .catch(() => {})
@@ -295,11 +330,10 @@ async function send(text) {
 
 async function clearHistory() {
   messages.value = []
-  status.value = ''
   // 只清今天的聊天原文；L1/L2 是长期记忆，不跟着删（要全清去系统设置）
   await window.api.memClear?.('today')
   push('pet', '刚才的聊天我忘掉啦～', {})
-  status.value = '已清空今天的记录'
+  showStatus('已清空今天的记录', 2500)
 }
 
 function openSettings() {
@@ -353,6 +387,9 @@ onMounted(async () => {
 
   await refreshMemory()
   await loadChatHistory()
+  // 打开就先给出模型与累计消耗，别让底部左侧空着
+  tokenInfo = `${modelLabel.value} · 累计 ${fmtTokens(tokenTotal.value)} tokens`
+  status.value = tokenInfo
   if (messages.value.length) {
     scrollBottom()
   } else {
@@ -577,8 +614,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   padding: 4px 6px 0;
-  font-size: 10px;
-  color: #7a94b0;
+  font-size: 11px;
+  color: #55708f;
 }
 .f-l {
   flex: 1;
@@ -586,5 +623,10 @@ onMounted(async () => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.f-r {
+  flex: none;
+  margin-left: 6px;
+  color: #6d87a3;
 }
 </style>
