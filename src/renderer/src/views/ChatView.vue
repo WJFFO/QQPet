@@ -115,6 +115,8 @@ const status = ref('')
 // 底部状态栏：模型 + token 消耗。累计值落 localStorage，重开窗口也还在；
 // «记忆已更新» 这类临时提示会自动恢复成 token 信息，不再把它顶掉。
 const TOKEN_KEY = 'qqpet.ai.tokens'
+// 上一次真正发出去的人设文本：变了说明主人刚换过性格，这一轮要特别强调
+const PERSONA_SEEN_KEY = 'qqpet.personaSeen'
 const tokenTotal = ref(Number(localStorage.getItem(TOKEN_KEY)) || 0)
 let tokenInfo = ''
 let statusTimer = null
@@ -207,13 +209,18 @@ function petState() {
   }
 }
 
-function systemPrompt() {
+function systemPrompt(personaChanged = false) {
   const s = petState()
   const persona = personaText(cfg.value.persona)
   return [
     // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
     `【人设·最高优先级】${persona}`,
     `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。说话的语气、口头禅、称呼都要贴合上面的人设。`,
+    // 上下文里的历史是旧语气时，模型会照着学，光靠上面一句压不住，得显式作废
+    '语气一律以人设为准，不要模仿历史消息里的自称、口头禅和句式。',
+    personaChanged
+      ? '【刚换过性格】主人刚刚给你换了新性格，历史消息里的说话方式全部作废，从这一句起严格按新人设开口。'
+      : '',
     `当前状态：等级 ${s.level}，饱食 ${s.hunger}/100，清洁 ${s.clean}/100，健康 ${s.health}/100，心情 ${s.mood}/1000，元宝 ${s.coins}。`,
     '保持这个人设说话，不要因为一轮对话就跳出角色。状态不好（饿/脏/病/心情低）时要自然地在台词里流露出来。',
     '回复要求：像宠物说话，口语短句，20~50 字以内，不要用 Markdown、不要列表、不要括号动作描写。',
@@ -227,7 +234,7 @@ function systemPrompt() {
     '主人只是闲聊时用 interact 或 none，别每次都乱动。mood 是这次对话对心情的影响，-10~10 的整数，普通聊天给 0~3。',
     '你会按 emotion 播放对应的心情动画，所以情绪要选准：被夸→happy/shy，被冷落→sad，被逗→angry，饿着→hungry。',
     memoryBlock.value
-      ? `【你的记忆】\n${memoryBlock.value}\n这些是你确实记得的事。聊到相关话题时自然用上，别生硬复述，也别一次全倒出来。`
+      ? `【你的记忆】\n${memoryBlock.value}\n这些是你确实记得的事。聊到相关话题时自然用上，别生硬复述，也别一次全倒出来。记忆只提供事实，说话语气仍然按人设来。`
       : ''
   ]
     .filter(Boolean)
@@ -275,17 +282,24 @@ async function send(text) {
   thinking.value = true
   status.value = `${modelLabel.value} 请求中…`
 
-  // 只带最近 12 轮，控制 token（更早的交给 L1 摘要概括）
+  // 人设换过没有：换过的这一轮要把历史压到最短，否则模型会照着旧语气继续演
+  const personaNow = personaText(cfg.value.persona)
+  const personaBefore = localStorage.getItem(PERSONA_SEEN_KEY) || ''
+  const personaChanged = !!personaBefore && personaBefore !== personaNow
+  if (personaBefore !== personaNow) localStorage.setItem(PERSONA_SEEN_KEY, personaNow)
+
+  // 平时带最近 12 条控制 token；刚换人设只留 2 条，避免旧语气被当成范例
+  const keep = personaChanged ? 2 : 12
   const history = messages.value
     .filter((m) => !m.fail)
-    .slice(-12)
+    .slice(-keep)
     .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }))
 
   const res = await window.api.aiChat({
     apiKey: cfg.value.apiKey,
     baseUrl: cfg.value.baseUrl,
     model: cfg.value.model,
-    messages: [{ role: 'system', content: systemPrompt() }, ...history]
+    messages: [{ role: 'system', content: systemPrompt(personaChanged) }, ...history]
   })
 
   thinking.value = false
