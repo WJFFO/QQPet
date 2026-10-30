@@ -608,15 +608,31 @@ function createPetMachine() {
     sayUntil(`开始${job?.name || '打工'}，${minutes} 分钟后领取 ${minutes * workRate} 元宝～`, 2600)
   }
 
-  // 提前收工：不结算、清空会话（原版打工中途停止没有收益）
+  // 打工人已经干出来的工钱：按干满的整分钟折算，和打工页「已赚」口径完全一致。
+  // 干不满一分钟就是 0——原版打工本来就按分钟计，不搞秒级进位。
+  function workEarned() {
+    const doneMs = Math.max(0, Math.min(Date.now(), workEndsAt) - workStartAt)
+    const doneMin = Math.floor(doneMs / 60000)
+    return { amt: Math.max(0, doneMin * workRate), doneMin }
+  }
+
+  // 提前收工：按已干时长结算，未干完的那部分不给。
+  // 原来这里直接丢弃工钱，等于白干，用户中途想停就只能硬撑到点。
   function stopWork() {
     if (!working.value) return
+    const { amt, doneMin } = workEarned()
     working.value = false
     workLeftSec.value = 0
     workAccum = 0
     localStorage.removeItem('qqpet.work')
+    if (amt > 0) addCoins(amt)
     window.api?.storageChanged?.()
-    sayUntil('收工啦，这次没干完就没有工钱哦～', 2600)
+    sayUntil(
+      amt > 0
+        ? `提前收工，干了 ${doneMin} 分钟，结算 ${amt} 元宝～`
+        : '才干不到一分钟，还没攒到工钱呢～',
+      3200
+    )
     backToStand()
     maybeResumeAuto()
   }
@@ -831,6 +847,16 @@ function createPetMachine() {
             workAccum += workRate
           }
           addDailyProgress('workMin', delta) // 每日任务：打工累计分钟
+          // 顺手把已赚金额写进存档：万一进程被强杀，下次启动还能按这份结算
+          try {
+            const w = JSON.parse(localStorage.getItem('qqpet.work') || 'null')
+            if (w) {
+              w.paid = workAccum
+              localStorage.setItem('qqpet.work', JSON.stringify(w))
+            }
+          } catch {
+            /* 存档读写失败不影响打工本身 */
+          }
           dirty = true
         }
         // 打工气泡提示：每 WORK_HINT_INTERVAL 分钟报一次剩余时间，最后 1 分钟单独提醒。
@@ -845,9 +871,10 @@ function createPetMachine() {
           }
         }
         if (Date.now() >= workEndsAt) {
+          // 到点结算走同一个折算函数：中途收工和干满，只有时长不同，算法一致
+          const { amt } = workEarned()
           working.value = false
           workLeftSec.value = 0
-          const amt = workAccum
           workAccum = 0
           localStorage.removeItem('qqpet.work')
           addCoins(amt)
@@ -1365,6 +1392,45 @@ function createPetMachine() {
     runDispatch(action, height)
   }
 
+  // 关窗口 / 退出程序：按已干时长结算，别让主人白干。
+  // 这里只写 localStorage，不碰 DOM 和 IPC——窗口正在销毁，气泡和广播都不可靠。
+  function settleWorkOnExit() {
+    if (!working.value) return
+    const { amt } = workEarned()
+    working.value = false
+    localStorage.removeItem('qqpet.work')
+    if (amt > 0) {
+      const cur = Number(localStorage.getItem('qqpet.coins')) || 0
+      localStorage.setItem('qqpet.coins', String(cur + amt))
+      coins.value = cur + amt
+    }
+  }
+  window.addEventListener('beforeunload', settleWorkOnExit)
+
+  // 上次被强杀（任务管理器结束进程）留下的打工会话：按存档里每分钟写的 paid 兜底结算，
+  // 关机期间不算工时。无论有没有钱，都要把残档清掉，否则打工页会显示一个不存在的倒计时。
+  ;(() => {
+    let raw = null
+    try {
+      raw = localStorage.getItem('qqpet.work')
+    } catch {
+      return
+    }
+    if (!raw) return
+    let w = null
+    try {
+      w = JSON.parse(raw)
+    } catch {
+      /* 坏档直接丢弃 */
+    }
+    localStorage.removeItem('qqpet.work')
+    const paid = Math.max(0, Number(w?.paid) || 0)
+    if (paid <= 0) return
+    coins.value = (Number(localStorage.getItem('qqpet.coins')) || 0) + paid
+    localStorage.setItem('qqpet.coins', String(coins.value))
+    setTimeout(() => sayUntil(`上次打工中断了，按干过的时长结算 ${paid} 元宝～`, 3200), 1500)
+  })()
+
   // 释放定时器。组件卸载（或热更新重挂）时必须调，否则旧的 1 秒心跳会继续
   // persistLevel，把旧数值写回 localStorage，和新实例交替覆盖。
   function dispose() {
@@ -1372,6 +1438,7 @@ function createPetMachine() {
       clearInterval(statTick)
       statTick = null
     }
+    window.removeEventListener('beforeunload', settleWorkOnExit)
     stopAuto()
     clearTimers()
     clearEvolveTimer()

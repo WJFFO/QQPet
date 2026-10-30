@@ -26,7 +26,7 @@
         </div>
         <QProgress :value="progress" color="blue" />
         <div class="sc-tip">打工期间饱食度、清洁度掉得更快，记得回家喂饭洗澡～</div>
-        <button class="qq-btn" @click="stopWork">不干了</button>
+        <button class="qq-btn" @click="stopWork">{{ stopLabel }}</button>
       </div>
     </div>
 
@@ -163,6 +163,10 @@ const earnedCoins = computed(() => {
   return Math.max(0, mins * work.value.rate)
 })
 const canStart = computed(() => !!selected.value && level.value >= selected.value.minLevel && !working.value)
+// 中途收工也结算：把能拿多少写在按钮上，避免用户以为“停了就白干”
+const stopLabel = computed(() =>
+  earnedCoins.value > 0 ? `收工，拿走 ${earnedCoins.value} 元宝` : '收工（还没干满一分钟）'
+)
 const startHint = computed(() => {
   if (!selected.value) return '请选择岗位'
   if (level.value < selected.value.minLevel) return `需要 Lv.${selected.value.minLevel}`
