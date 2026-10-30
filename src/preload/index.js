@@ -98,7 +98,7 @@ const api = {
   memStats: () => ipcRenderer.invoke('mem-stats'),
   memOpenDir: () => ipcRenderer.invoke('mem-open-dir'),
   memExport: (meta) => ipcRenderer.invoke('mem-export', meta),
-  // 数据存储目录：默认 exe 同级 qqpetdata，可改；改动时旧数据会自动补过去
+  // 数据存储目录：默认在用户数据目录下，可改；改动时旧数据会自动补过去
   dataDirInfo: () => ipcRenderer.invoke('datadir-info'),
   dataDirPick: () => ipcRenderer.invoke('datadir-pick'),
   dataDirSet: (dir) => ipcRenderer.invoke('datadir-set', dir),

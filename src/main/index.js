@@ -387,7 +387,7 @@ ipcMain.handle('mem-export', (e, meta) =>
   memory.exportAs(BrowserWindow.fromWebContents(e.sender), meta || {})
 )
 
-// —— 数据存储目录（默认 exe 同级 qqpetdata，可在设置里改）——
+// —— 数据存储目录（默认在 userData 下的 qqpetdata，可在设置里改）——
 ipcMain.handle('datadir-info', () => dataDir.info())
 ipcMain.handle('datadir-pick', (e) => dataDir.pick(BrowserWindow.fromWebContents(e.sender)))
 ipcMain.handle('datadir-set', (_e, dir) => dataDir.set(dir))

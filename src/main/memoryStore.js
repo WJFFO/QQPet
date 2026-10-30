@@ -40,7 +40,7 @@ export const LIMITS = {
 }
 
 // app.getPath 必须等 ready，所以路径全部惰性求值；
-// 具体根目录由 dataDir 决定（默认 exe 同级 qqpetdata，可在设置里改）
+// 具体根目录由 dataDir 决定（默认 userData/qqpetdata，可在设置里改）
 const root = () => dataDir.get()
 const chatDir = () => join(root(), 'chats')
 const profilePath = () => join(root(), 'profile.json')

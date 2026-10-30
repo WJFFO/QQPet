@@ -45,7 +45,7 @@
         </div>
         <div class="hint">提示：鼠标穿透只能从这里或托盘菜单关闭。</div>
 
-        <!-- 数据目录：默认在 exe 同级的 qqpetdata，可改到任意位置（改动时旧数据自动补过去） -->
+        <!-- 数据目录：默认在用户数据目录（升级安装不会清空），可改到任意位置（改动时旧数据自动补过去） -->
         <div class="dpath">
           <div class="dp-row">
             <span class="dp-h">数据目录</span>
@@ -376,7 +376,7 @@ async function testAi() {
   aiTestMsg.value = res?.ok ? `连接成功：${res.content || 'OK'}` : res?.error || '失败'
 }
 
-// —— 数据目录：默认 exe 同级 qqpetdata，可改到任意位置；改动时旧数据会自动补过去 ——
+// —— 数据目录：默认在用户数据目录，可改到任意位置；改动时旧数据会自动补过去 ——
 const dataDir = ref('')
 const isCustomDir = ref(false)
 const dirMsg = ref('')
@@ -387,8 +387,12 @@ async function loadDataDir() {
   if (!i) return
   dataDir.value = i.dir || ''
   isCustomDir.value = !!i.isCustom
-  // 启动时若因权限问题回退过，把原因显示出来；已有操作提示时不覆盖
-  if (i.note && !dirMsg.value) {
+  // 数据放安装目录里最要命：下次升级安装会连目录一起删掉，这条优先于其它提示
+  if (i.inInstallDir) {
+    dirBad.value = true
+    dirMsg.value = '这个目录在安装目录内，升级安装会把聊天记录一起清空，建议点「默认」换到用户数据目录'
+  } else if (i.note && !dirMsg.value) {
+    // 启动时若因权限问题回退过，把原因显示出来；已有操作提示时不覆盖
     dirBad.value = true
     dirMsg.value = i.note
   }
