@@ -90,17 +90,3 @@ npm run build:linux  # Linux（AppImage / snap / deb）
 | 动画 | Ruffle（Flash 运行时，加载原始 SWF 资源） |
 | 数据 | 本地 JSON / JSONL 存储，数据目录可自定义 |
 
-## 截图生成
-
-`docs/screenshots/` 下的界面图由脚本采集，便于版本更新后同步刷新：
-
-```bash
-# 1) 带调试端口启动应用
-npx electron . --remote-debugging-port=9222
-
-# 2) 采集各功能窗口截图
-node scripts/shots.mjs
-
-# 3) 重新生成顶部横幅（可选）
-npx electron scripts/hero-shot.cjs
-```
