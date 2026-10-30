@@ -119,6 +119,7 @@ import {
   isHungerYellow,
   isCleanYellow
 } from '../composables/stats'
+import { rememberPrevName } from '../composables/aiConfig'
 
 defineEmits(['close'])
 
@@ -169,11 +170,14 @@ function saveEdit() {
   if (!val) return
   if (which === 'name') {
     if (val === petName.value) return
+    // 旧名字要留个记录：聊天历史里全是旧称呼，不做迁移模型会一直叫旧名
+    rememberPrevName('qqpet.namePrev', petName.value)
     petName.value = val
     localStorage.setItem('qqpet.name', val)
     window.api.sendPetBubble?.(`以后就叫我「${val}」啦～`)
   } else {
     if (val === owner.value) return
+    rememberPrevName('qqpet.ownerPrev', owner.value)
     owner.value = val
     localStorage.setItem('qqpet.owner', val)
   }

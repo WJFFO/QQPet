@@ -142,6 +142,59 @@ export const SELF_REF_RULE =
   '称呼规则：不管什么性格，说自己的时候一律用「我」，称呼主人用「你」。禁止使用本座、本尊、吾、吾辈、老夫、朕这类自称；历史消息里如果出现过，那是过去的错，不要跟着学。'
 
 /**
+ * 改名同步：宠物名、主人称呼改过之后，聊天历史和记忆摘要里仍然留着旧名字，
+ * 模型照着旧名字叫，看起来就像改名没生效。这里把喂给模型的文本里的旧名字
+ * 换成新的——界面上的记录保持原样，洗的只是上下文（和 normalizeSelfRef 一个思路）。
+ */
+const NAME_PREV_MAX = 6
+
+/** 改名时调用：把旧名字记进名单，供 normalizeNames 之后替换 */
+export function rememberPrevName(prevKey, oldName) {
+  const old = String(oldName || '').trim()
+  if (old.length < 2) return // 单字旧名做全局替换会误伤正常文字
+  let list = []
+  try {
+    const raw = JSON.parse(localStorage.getItem(prevKey) || '[]')
+    if (Array.isArray(raw)) list = raw
+  } catch {
+    list = []
+  }
+  if (list.includes(old)) return
+  list.push(old)
+  try {
+    localStorage.setItem(prevKey, JSON.stringify(list.slice(-NAME_PREV_MAX)))
+  } catch {
+    /* 配额满时忽略：不影响改名本身 */
+  }
+}
+
+/** 把文本里出现过的旧名字换回现在的名字 */
+export function normalizeNames(text) {
+  let s = String(text || '')
+  const pairs = [
+    [localStorage.getItem('qqpet.name'), 'qqpet.namePrev'],
+    [localStorage.getItem('qqpet.owner'), 'qqpet.ownerPrev']
+  ]
+  for (const [curRaw, prevKey] of pairs) {
+    const cur = String(curRaw || '').trim()
+    if (!cur) continue
+    let prev = []
+    try {
+      const raw = JSON.parse(localStorage.getItem(prevKey) || '[]')
+      if (Array.isArray(raw)) prev = raw
+    } catch {
+      continue
+    }
+    for (const p of prev) {
+      const old = String(p || '').trim()
+      // 长度 < 2 的旧名跳过：一个字的替换会把正常句子改坏
+      if (old.length >= 2 && old !== cur) s = s.split(old).join(cur)
+    }
+  }
+  return s
+}
+
+/**
  * 最近发生的照顾动作（喂食 / 洗澡 / 治病 / 玩耍）。
  *
  * 这些动作发生在宠物窗口，聊天窗只能读到 localStorage 里的数值——

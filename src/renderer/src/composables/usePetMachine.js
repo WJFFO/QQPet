@@ -14,6 +14,7 @@ import {
   personaText,
   autoTalkGapMs,
   normalizeSelfRef,
+  normalizeNames,
   SELF_REF_RULE,
   recordAct,
   recentActsText
@@ -196,6 +197,12 @@ function createPetMachine() {
   const adopted = ref(localStorage.getItem('qqpet.adopted') === '1')
   // 宠物昵称（领养时设定，存储于 qqpet.name）
   const petName = ref(localStorage.getItem('qqpet.name') || '')
+  // 档案页改名后广播 storage-changed：这个窗口的 petName 也得跟着变，
+  // 否则托盘文案、气泡、主动搭话还挂着旧名字
+  const offNameSync = window.api?.onStorageChanged?.(() => {
+    const n = localStorage.getItem('qqpet.name') || ''
+    if (n && n !== petName.value) petName.value = n
+  })
 
   // 生病阈值：健康 ≤ 该值时进入生病态。
   // 生病阈值 SICK_AT 统一在 stats.js（健康 ≤30 进入生病态）。
@@ -1035,7 +1042,8 @@ function createPetMachine() {
       if (ctx?.impression) memParts.push(`更早以前：${ctx.impression}`)
       if (ctx?.summary) memParts.push(`最近聊过：\n${ctx.summary}`)
       if (ctx?.facts) memParts.push(`你记着的事：\n${ctx.facts}`)
-      const memText = memParts.join('\n')
+      // 记忆摘要里也是旧名字，改名后一起迁移
+      const memText = normalizeNames(memParts.join('\n'))
       // 刚喂过/刚治过病：让开口时知道，否则它会照着历史里的「我好饿」继续说
       const actsText = recentActsText()
 
@@ -1049,7 +1057,8 @@ function createPetMachine() {
             role: 'system',
             content: [
               `【人设·最高优先级】${personaText(cfg.persona)}`,
-              `你是桌面宠物「${petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。说话要贴合上面的人设。`,
+              // 名字实时读 localStorage：改名后这个窗口的 petName ref 不一定已经刷新
+              `你是桌面宠物「${localStorage.getItem('qqpet.name') || petName.value || '宝贝'}」，主人叫「${localStorage.getItem('qqpet.owner') || localStorage.getItem('qqpet.savedQq') || '主人'}」。名字以这一行为准，记忆或历史里出现的其他名字都是旧称呼，不要再使用。说话要贴合上面的人设。`,
               memText ? `【你的记忆】\n${memText}\n聊到相关的事可以顺口提一句，显得你记得。记忆只提供事实，语气按人设来。` : '',
               SELF_REF_RULE,
               actsText
@@ -1067,7 +1076,8 @@ function createPetMachine() {
           // 历史里的自称先洗成「我」，避免模型照着「本座」学
           ...(ctx?.history || []).map((h) => ({
             role: h.role,
-            content: h.role === 'assistant' ? normalizeSelfRef(h.content) : h.content
+            // 历史里的自称先洗成「我」，旧名字换成现在的名字
+            content: h.role === 'assistant' ? normalizeNames(normalizeSelfRef(h.content)) : normalizeNames(h.content)
           })),
           {
             role: 'user',
@@ -1439,6 +1449,7 @@ function createPetMachine() {
       statTick = null
     }
     window.removeEventListener('beforeunload', settleWorkOnExit)
+    offNameSync?.()
     stopAuto()
     clearTimers()
     clearEvolveTimer()

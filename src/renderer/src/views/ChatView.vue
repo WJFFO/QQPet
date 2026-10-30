@@ -79,6 +79,7 @@ import {
   readAiConfig,
   personaText,
   normalizeSelfRef,
+  normalizeNames,
   SELF_REF_RULE,
   recentActsText
 } from '../composables/aiConfig'
@@ -231,7 +232,8 @@ function systemPrompt(personaChanged = false) {
   return [
     // 人设放在最前面并标成最高优先级：混在一堆格式要求中间时，模型很容易忽略
     `【人设·最高优先级】${persona}`,
-    `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。说话的语气、口头禅、称呼都要贴合上面的人设。`,
+    // 名字以这一行为准：改名后历史里全是旧称呼，不点明模型会照着旧名字叫
+    `你是桌面宠物「${s.name}」的扮演者，主人叫「${s.owner}」。名字以这一行为准，历史消息或记忆里出现的其他名字都是以前用过的旧称呼，不要再使用。说话的语气、口头禅、称呼都要贴合上面的人设。`,
     // 称呼是唯一不随性格变的东西：统一用「我」，中二/傲娇怎么演都不会冒出「本座」
     SELF_REF_RULE,
     // 上下文里的历史是旧语气时，模型会照着学，光靠上面一句压不住，得显式作废
@@ -283,7 +285,8 @@ async function refreshMemory() {
   if (ctx.impression) parts.push(`更早以前：${ctx.impression}`)
   if (ctx.summary) parts.push(`最近聊过：\n${ctx.summary}`)
   if (ctx.facts) parts.push(`你记着的事：\n${ctx.facts}`)
-  memoryBlock.value = parts.join('\n')
+  // 记忆里存的也是旧名字，改名后要一起迁移，否则摘要会继续用旧称呼
+  memoryBlock.value = normalizeNames(parts.join('\n'))
   memFacts.value = ctx.factCount || 0
 }
 
@@ -320,7 +323,8 @@ async function send(text) {
     .map((m) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       // 记录本身不改，喂给模型前把「本座」这类自称洗成「我」，断掉模仿源
-      content: m.role === 'user' ? m.text : normalizeSelfRef(m.text)
+      // 历史里的自称先洗成「我」，旧名字换成现在的名字——否则改名等于没改
+      content: m.role === 'user' ? normalizeNames(m.text) : normalizeNames(normalizeSelfRef(m.text))
     }))
 
   const res = await window.api.aiChat({
