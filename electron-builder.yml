@@ -6,6 +6,15 @@ compression: maximum # NSIS 安装包 LZMA2 最大压缩，减小安装包体积
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  # 非运行时目录：默认是排除法（包含整个项目），不显式剔掉就会被塞进安装包。
+  # .workbuddy 里是开发笔记/工作日志，属内部记录，绝不能随安装包发出去。
+  - '!.workbuddy/**'
+  - '!docs/**'
+  - '!scripts/**'
+  - '!spec/**'
+  - '!qqpetdata/**'
+  - '!dist/**'
+  - '!*.md'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
