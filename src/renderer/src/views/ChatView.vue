@@ -327,12 +327,29 @@ async function loadChatHistory() {
 }
 
 // 设置页保存后会广播 storage-changed，这里重新读一次配置
+// 宠物主动搭话落盘后主进程广播 chat-updated，重载历史让搭话实时出现在列表里
 let off = null
+let offChat = null
+async function onChatUpdated() {
+  if (thinking.value) return // 有回复在途时不重载，避免冲掉正在显示的对话
+  const onlyGreeting = messages.value.length === 1
+  await loadChatHistory()
+  if (!messages.value.length && onlyGreeting) {
+    push('pet', '主人你来啦～想聊点什么？', {}) // 还没有任何记录时保留开场白
+  } else if (messages.value.length) {
+    scrollBottom()
+  }
+}
+
 onMounted(async () => {
   off = window.api.onStorageChanged?.(() => {
     cfg.value = readCfg()
   })
-  window.addEventListener('beforeunload', () => off && off())
+  offChat = window.api.onChatUpdated?.(onChatUpdated)
+  window.addEventListener('beforeunload', () => {
+    off && off()
+    offChat && offChat()
+  })
 
   await refreshMemory()
   await loadChatHistory()

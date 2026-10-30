@@ -948,6 +948,22 @@ function createPetMachine() {
   let lastAutoTalkAt = Date.now() // 启动后先按正常间隔等，不要一开机就开口
   let autoTalking = false
 
+  // 平时闲聊的话题池：每次随机抽一个，让搭话内容不重样、也不围绕数值转
+  const AUTO_TOPICS = [
+    '随便闲聊一句日常',
+    '撒个娇，求主人陪陪',
+    '好奇地问主人一个问题',
+    '分享一个刚冒出来的小念头',
+    '自言自语一句碎碎念',
+    '说说此刻发呆的感受',
+    '突然馋了，念叨想吃的',
+    '夸夸主人',
+    '抱怨在桌面上待着有点无聊',
+    '讲个一句话的小笑话'
+  ]
+  // 告急状态的中文说法（搭话 prompt 用）
+  const URGE_CN = { hungry: '肚子饿了', dirty: '身上脏了', sick: '身体不舒服', sad: '心情很低落' }
+
   // 统一走 aiConfig 读取（老 provider 配置会自动迁移成 baseUrl/model）
   function readAiCfg() {
     const cfg = readAiConfig()
@@ -1007,9 +1023,14 @@ function createPetMachine() {
           ...(ctx?.history || []),
           {
             role: 'user',
-            content: `当前：等级 ${level.value}，饱食 ${hunger.value}/${STAT_MAX.hunger}（${hungerBand(hunger.value).label}），清洁 ${clean.value}/${STAT_MAX.clean}（${cleanBand(clean.value).label}），健康 ${health.value}/100，心情 ${moodVal.value}/1000（${moodBand(moodVal.value).label}），元宝 ${coins.value}。${
-              urge ? `现在最要紧的是「${urge}」，开口就往这上面说。` : '状态还行，随便说点什么。'
-            }`
+            content: [
+              // 状态只给档位描述，不给数字——给了数字模型就会把它们念出来
+              `现在心情「${moodBand(moodVal.value).label}」，饱食「${hungerBand(hunger.value).label}」，清洁「${cleanBand(clean.value).label}」，健康${health.value <= 50 ? '不太好' : '还好'}。`,
+              urge
+                ? `其实是${URGE_CN[urge] || urge}才开口的，话要往这上面引，让主人注意到并帮忙。`
+                : `这次想聊：${AUTO_TOPICS[Math.floor(Math.random() * AUTO_TOPICS.length)]}。`,
+              '内容要随机自然，像自己真的想说话；不要提到等级、元宝或任何数字。'
+            ].join('\n')
           }
         ]
       })

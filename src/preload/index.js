@@ -137,6 +137,12 @@ const api = {
     ipcRenderer.on('storage-changed', listener)
     return () => ipcRenderer.removeListener('storage-changed', listener)
   },
+  // 聊天记录有新增（宠物主动搭话落盘）→ 聊天窗收到后重载历史
+  onChatUpdated: (cb) => {
+    const listener = () => cb()
+    ipcRenderer.on('chat-updated', listener)
+    return () => ipcRenderer.removeListener('chat-updated', listener)
+  },
   // 打开"首次领养宠物"选择窗口（选性别+命名）
   openPetSelect: () => ipcRenderer.send('open-pet-select'),
   // 领养完成：把选择的性别/昵称交给主进程 → 转发宠物窗口开始播放 First 出生动画

@@ -23,6 +23,23 @@ if (process.platform === 'win32') {
   app.commandLine.appendSwitch('disable-features', 'WindowsDocking')
 }
 
+// 单实例锁：第二个实例直接退出。不加的话，双开（或上一个实例没退干净又启动）
+// 两个进程会抢同一个 userData 里的缓存目录，报
+// "Unable to move the cache: 拒绝访问(0x5)" / "Gpu Cache Creation failed: -2"。
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  // 再次启动时把已有主窗口调到前台，而不是让用户以为没开起来
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 160,
@@ -345,7 +362,19 @@ ipcMain.handle('ai-defaults', () => AI_DEFAULTS)
 
 // —— 聊天记录与记忆（JSONL 落盘，主进程唯一写入口）——
 // 聊天窗、宠物窗口都通过这几个通道读写同一份文件，避免多窗口 localStorage 互覆盖。
-ipcMain.handle('mem-append', (_e, rec) => memory.append(rec || {}))
+// 宠物主动搭话落盘后广播 chat-updated：聊天窗收到即时重载历史，不用重开窗口。
+function broadcastChatUpdated() {
+  const wins = [mainWindow, centerWindow, ...auxWindows.values()].filter(Boolean)
+  for (const w of wins) {
+    if (!w.isDestroyed()) w.webContents.send('chat-updated')
+  }
+}
+ipcMain.handle('mem-append', (_e, rec) => {
+  const r = memory.append(rec || {})
+  // 只在主动搭话时广播——聊天窗自己发的消息它本地已经 push 过了，重载反而多此一举
+  if (String(rec?.src || '') === 'auto') broadcastChatUpdated()
+  return r
+})
 ipcMain.handle('mem-context', (_e, limit) => memory.context(limit))
 ipcMain.handle('mem-history', (_e, opts) => memory.history(opts || {}))
 ipcMain.handle('mem-clear', (_e, scope) => memory.clear(scope))
@@ -733,6 +762,7 @@ ipcMain.on('login-success', () => {
 ipcMain.on('login-cancel', () => app.quit())
 
 app.whenReady().then(() => {
+  if (!gotTheLock) return // 未拿到单实例锁：等 quit 生效，不再初始化
   electronApp.setAppUserModelId('com.electron')
 
   // 数据目录：先确认可用（不可写会自动回退），再清理过期聊天记录
