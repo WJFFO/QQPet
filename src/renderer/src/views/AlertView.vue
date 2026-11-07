@@ -18,6 +18,17 @@
 
     <div class="btns">
       <img
+        class="btn"
+        :src="okImgs[okState]"
+        alt="确定"
+        draggable="false"
+        @mouseenter="okState = 1"
+        @mouseleave="okState = 0"
+        @mousedown="okState = 2"
+        @mouseup="okState = 1"
+        @click="answer(true)"
+      />
+      <img
         v-if="mode === 'confirm'"
         class="btn"
         :src="cancelImgs[cancelState]"
@@ -28,17 +39,6 @@
         @mousedown="cancelState = 2"
         @mouseup="cancelState = 1"
         @click="answer(false)"
-      />
-      <img
-        class="btn"
-        :src="okImgs[okState]"
-        alt="确定"
-        draggable="false"
-        @mouseenter="okState = 1"
-        @mouseleave="okState = 0"
-        @mousedown="okState = 2"
-        @mouseup="okState = 1"
-        @click="answer(true)"
       />
     </div>
   </div>
